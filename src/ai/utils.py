@@ -12,9 +12,9 @@ from src.data.test.common_utils import generate_dummy_dataset
 
 def initialize_weights(weights: torch.nn.Module, initialisation_type: str = 'xavier', scale: float = 2**0.5) -> None:
     for p in weights.parameters():
-        if len(p.shape) <= 1:
+        if len(p.shape) == 1:
             p.data.zero_()
-        else:
+        elif len(p.shape) > 1:
             if initialisation_type == 'xavier':
                 nn.init.xavier_uniform_(p.data)
             elif initialisation_type == 'constant':
@@ -50,7 +50,7 @@ def data_to_tensor(data: Union[list, np.ndarray, torch.Tensor]) -> torch.Tensor:
 
 
 def mlp_creator(sizes: List[int], activation: nn.Module, output_activation: nn.Module = None,
-                bias_in_last_layer: bool = True):
+                bias_in_last_layer: bool = True) -> nn.Module:
     """Create Multi-Layer Perceptron"""
     layers = []
     for j in range(len(sizes)-1):
@@ -58,7 +58,7 @@ def mlp_creator(sizes: List[int], activation: nn.Module, output_activation: nn.M
         layers += [nn.Linear(sizes[j], sizes[j+1], bias=True if bias_in_last_layer else is_not_last_layer)]
         act = activation if is_not_last_layer else output_activation
         if act is not None:
-            layers += [act()]
+            layers += [act]
     return nn.Sequential(*layers)
 
 ##################################################################
@@ -69,6 +69,7 @@ def mlp_creator(sizes: List[int], activation: nn.Module, output_activation: nn.M
 def generate_random_dataset_in_raw_data(output_dir: str, num_runs: int = 20,
                                         input_size: tuple = (100, 100, 3), output_size: tuple = (1,),
                                         continuous: bool = True,
+                                        fixed_input_value: Union[float, np.ndarray] = None,
                                         fixed_output_value: Union[float, np.ndarray] = None,
                                         store_hdf5: bool = False) -> dict:
     """Generate data, stored in raw_data directory of output_dir"""
@@ -79,6 +80,7 @@ def generate_random_dataset_in_raw_data(output_dir: str, num_runs: int = 20,
                                   input_size=input_size,
                                   output_size=output_size,
                                   continuous=continuous,
+                                  fixed_input_value=fixed_input_value,
                                   fixed_output_value=fixed_output_value,
                                   store_hdf5=store_hdf5)
     return info

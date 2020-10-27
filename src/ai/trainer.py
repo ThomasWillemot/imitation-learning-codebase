@@ -49,6 +49,7 @@ class TrainerConfig(EvaluatorConfig):
     kl_target: Union[str, float] = "default"
     max_actor_training_iterations: Union[str, int] = "default"
     max_critic_training_iterations: Union[str, int] = "default"
+    add_KL_divergence_loss: bool = False
 
     def __post_init__(self):
         # add options in post_init so they are easy to find
@@ -59,14 +60,14 @@ class TrainerConfig(EvaluatorConfig):
 
 class Trainer(Evaluator):
 
-    def __init__(self, config: TrainerConfig, network: BaseNet, super_init: bool = False):
+    def __init__(self, config: TrainerConfig, network: BaseNet, quiet: bool = False):
         # use super if this called from sub class.
         super().__init__(config, network, quiet=True)
 
-        if not super_init:
+        if not quiet:
             self._logger = get_logger(name=get_filename_without_extension(__file__),
                                       output_path=config.output_path,
-                                      quiet=True)
+                                      quiet=False)
             cprint(f'Started.', self._logger)
             self._optimizer = eval(f'torch.optim.{self._config.optimizer}')(params=self._net.parameters(),
                                                                             lr=self._config.learning_rate,
@@ -79,12 +80,21 @@ class Trainer(Evaluator):
     def train(self, epoch: int = -1, writer=None) -> str:
         self.put_model_on_device()
         total_error = []
-#        for batch in tqdm(self.data_loader.sample_shuffled_batch(), ascii=True, desc='train'):
+        #        for batch in tqdm(self.data_loader.sample_shuffled_batch(), ascii=True, desc='train'):
         for batch in self.data_loader.sample_shuffled_batch():
             self._optimizer.zero_grad()
-            predictions = self._net.forward(batch.observations, train=True)
             targets = data_to_tensor(batch.actions).type(self._net.dtype).to(self._device)
+            if self._config.add_KL_divergence_loss:
+                predictions, mean, std = self._net.forward_with_distribution(batch.observations, train=True)
+            else:
+                predictions = self._net.forward(batch.observations, train=True)
+
             loss = self._criterion(predictions, targets).mean()
+            if self._config.add_KL_divergence_loss:
+                # https://arxiv.org/pdf/1312.6114.pdf
+                KL_loss = -0.5 * torch.sum(1 + std.pow(2).log() - mean.pow(2) - std.pow(2))
+                loss += KL_loss
+
             loss.backward()
             if self._config.gradient_clip_norm != -1:
                 nn.utils.clip_grad_norm_(self._net.parameters(),
@@ -101,6 +111,12 @@ class Trainer(Evaluator):
         if writer is not None:
             writer.set_step(self._net.global_step)
             writer.write_distribution(error_distribution, 'training')
+            if self._config.add_KL_divergence_loss:
+                writer.write_scalar(KL_loss, 'KL_divergence')
+            if self._config.store_output_on_tensorboard and epoch % 30 == 0:
+                writer.write_output_image(predictions, 'training/predictions')
+                writer.write_output_image(targets, 'training/targets')
+                writer.write_output_image(torch.stack(batch.observations), 'training/inputs')
         return f' training {self._config.criterion} {error_distribution.mean: 0.3e} [{error_distribution.std:0.2e}]'
 
     def get_checkpoint(self) -> dict:
@@ -121,7 +137,7 @@ class Trainer(Evaluator):
         self._optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
         if self._scheduler is not None:
             self._scheduler.load_state_dict(checkpoint['scheduler_state_dict'])
-        if self._config.device != 'cpu':
+        if self._device.type != 'cpu':
             for state in self._optimizer.state.values():
                 for k, v in state.items():
                     if isinstance(v, torch.Tensor):

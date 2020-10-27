@@ -32,8 +32,11 @@ export LD_LIBRARY_PATH=/opt/ros/melodic/lib:${HOME}/src/sim/ros/python2_ros_ws/d
 export CMAKE_PREFIX_PATH=/opt/ros/melodic:${HOME}/src/sim/ros/python2_ros_ws/devel:${HOME}/src/sim/ros/python3_ros_ws/devel
 
 export DSO_PATH=${HOME}/src/sim/ros/dso
-
+export TURTLEBOT3_MODEL='burger'
 cd "${HOME}" || exit 1
 
+#IPADDRESS="$(ip addr show wlp2s0 | grep inet | head -1 | cut -d '/' -f 1 | cut -d ' ' -f 6)"
+#alias turtle='export ROS_MASTER_URI=http://${IPADDRESS}:11311 && export ROS_HOSTNAME={IPADDRESS}'
+alias turtle='export ROS_MASTER_URI=http://192.168.0.149:11311 && export ROS_HOSTNAME=192.168.0.149'
 # potentially remove .singularity.d/libs from LD_LIBRARY_PATH
 "$@"

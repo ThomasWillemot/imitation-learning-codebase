@@ -5,6 +5,20 @@ from src.condor.condor_job import CondorJobConfig, CondorJob, create_jobs_from_j
 from src.condor.helper_functions import create_configs, translate_keys_to_string
 
 
+def prepare_param_study(base_config_file: str,
+                        job_config_object: CondorJobConfig,
+                        number_of_jobs: int,
+                        output_path: str) -> List[CondorJob]:
+    jobs = []
+    jobs.extend(prepare_batch_size_study(base_config_file, job_config_object, number_of_jobs, output_path))
+    jobs.extend(prepare_learning_rate_study(base_config_file, job_config_object, number_of_jobs, output_path))
+    jobs.extend(prepare_optimiser_study(base_config_file, job_config_object, number_of_jobs, output_path))
+    jobs.extend(prepare_phi_study(base_config_file, job_config_object, number_of_jobs, output_path))
+    jobs.extend(prepare_ppo_epsilon_study(base_config_file, job_config_object, number_of_jobs, output_path))
+    jobs.extend(prepare_ppo_max_train_steps_study(base_config_file, job_config_object, number_of_jobs, output_path))
+    return jobs
+
+
 def prepare_batch_size_study(base_config_file: str,
                              job_config_object: CondorJobConfig,
                              number_of_jobs: int,
@@ -28,7 +42,6 @@ def prepare_learning_rate_study(base_config_file: str,
                                 job_config_object: CondorJobConfig,
                                 number_of_jobs: int,
                                 output_path: str) -> List[CondorJob]:
-    #learning_rates = [0.1, 0.01, 0.001, 0.0001, 0.00001]
     learning_rates = [0.1, 0.01, 0.001, 0.0001, 0.00001]
     seeds = [123 * n + 5100 for n in range(number_of_jobs)]
     model_paths = [os.path.join(output_path, 'models', f'sd_{seed}_lr_{lr}') for lr in learning_rates for seed in seeds]
@@ -39,8 +52,6 @@ def prepare_learning_rate_study(base_config_file: str,
                        [bs for bs in learning_rates for _ in range(len(seeds))],
                    translate_keys_to_string(['trainer_config', 'actor_learning_rate']):
                        [bs for bs in learning_rates for _ in range(len(seeds))],
-#                   translate_keys_to_string(['trainer_config', 'critic_learning_rate']):
-#                       [bs for bs in learning_rates for _ in range(len(seeds))]
                    }
     config_files = create_configs(base_config=base_config_file,
                                   output_path=output_path,

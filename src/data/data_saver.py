@@ -124,7 +124,7 @@ class DataSaver:
                                   dst=dst, time_stamp=experience.time_stamp)
 
         for key, value in experience.info.items():
-            self._store_frame(data=np.asarray(value), dst=key, time_stamp=experience.time_stamp)
+            self._store_frame(data=np.asarray(value), dst=f'info_{key}', time_stamp=experience.time_stamp)
 
         if experience.done in [TerminationType.Success, TerminationType.Failure]:
             os.system(f'touch {os.path.join(self._config.saving_directory, experience.done.name)}')
@@ -169,7 +169,8 @@ class DataSaver:
             for run in sorted(os.listdir(raw_data_dir))
         ]
 
-    def create_train_validation_hdf5_files(self, runs: List[str] = None, input_size: List[int] = None) -> None:
+    def create_train_validation_hdf5_files(self, runs: List[str] = None,
+                                           input_size: List[int] = None) -> None:
         all_runs = runs if runs is not None else self._get_runs()
 
         number_of_training_runs = int(self._config.training_validation_split*len(all_runs))
@@ -184,7 +185,7 @@ class DataSaver:
                 'input_size': input_size
             })
             data_loader = DataLoader(config=config)
-            data_loader.load_dataset(arrange_according_to_timestamp=False)
+            data_loader.load_dataset()
             create_hdf5_file_from_dataset(filename=os.path.join(self._config.output_path, file_name + '.hdf5'),
                                           dataset=data_loader.get_dataset())
             cprint(f'created {file_name}.hdf5', self._logger)

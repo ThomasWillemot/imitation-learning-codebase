@@ -7,6 +7,7 @@ from typing import Optional, Tuple
 
 import torch
 import yaml
+import numpy as np
 from dataclasses import dataclass
 from dataclasses_json import dataclass_json
 
@@ -15,7 +16,7 @@ from src.ai.evaluator import EvaluatorConfig, Evaluator
 from src.ai.trainer import TrainerConfig
 from src.ai.architectures import *  # Do not remove
 from src.ai.trainer_factory import TrainerFactory
-from src.core.utils import get_filename_without_extension, get_data_dir
+from src.core.utils import get_filename_without_extension, get_data_dir, get_date_time_tag
 from src.core.data_types import TerminationType, Distribution
 from src.core.config_loader import Config, Parser
 from src.core.logger import get_logger, cprint, MessageType
@@ -39,13 +40,15 @@ class ExperimentConfig(Config):
     train_every_n_steps: int = -1
     load_checkpoint_dir: Optional[str] = None  # path to checkpoints
     load_checkpoint_found: bool = True
-    save_checkpoint_every_n: int = 10
+    save_checkpoint_every_n: int = -1
     tensorboard: bool = False
+    tb_render_every_n_epochs: int = -1
     environment_config: Optional[EnvironmentConfig] = None
     data_saver_config: Optional[DataSaverConfig] = None
     architecture_config: Optional[ArchitectureConfig] = None
     trainer_config: Optional[TrainerConfig] = None
     evaluator_config: Optional[EvaluatorConfig] = None
+    tester_config: Optional[EvaluatorConfig] = None
 
     def __post_init__(self):
         assert not (self.number_of_episodes != -1 and self.train_every_n_steps != -1), \
@@ -61,6 +64,8 @@ class ExperimentConfig(Config):
             del self.trainer_config
         if self.evaluator_config is None:
             del self.evaluator_config
+        if self.tester_config is None:
+            del self.tester_config
         if self.load_checkpoint_dir is None:
             del self.load_checkpoint_dir
 
@@ -68,6 +73,7 @@ class ExperimentConfig(Config):
 class Experiment:
 
     def __init__(self, config: ExperimentConfig):
+        np.random.seed(123)
         self._epoch = 0
         self._max_mean_return = None
         self._config = config
@@ -84,18 +90,19 @@ class Experiment:
             if self._config.trainer_config is not None else None
         self._evaluator = Evaluator(config=self._config.evaluator_config, network=self._net) \
             if self._config.evaluator_config is not None else None
+        self._tester = None
         self._writer = None
         if self._config.tensorboard:  # Local import so code can run without tensorboard
             from src.core.tensorboard_wrapper import TensorboardWrapper
             self._writer = TensorboardWrapper(log_dir=config.output_path)
-        if self._config.load_checkpoint_dir is not None:
+        if self._config.load_checkpoint_found \
+                and len(glob(f'{self._config.output_path}/torch_checkpoints/*.ckpt')) > 0:
+            self.load_checkpoint(f'{self._config.output_path}/torch_checkpoints')
+        elif self._config.load_checkpoint_dir is not None:
             if not self._config.load_checkpoint_dir.startswith('/'):
                 self._config.load_checkpoint_dir = f'{get_data_dir(self._config.output_path)}/' \
                                                    f'{self._config.load_checkpoint_dir}'
             self.load_checkpoint(self._config.load_checkpoint_dir)
-        elif self._config.load_checkpoint_found \
-                and len(glob(f'{self._config.output_path}/torch_checkpoints/*.ckpt')) > 0:
-            self.load_checkpoint(f'{self._config.output_path}/torch_checkpoints')
 
         cprint(f'Initiated.', self._logger)
 
@@ -111,13 +118,18 @@ class Experiment:
 
     def _run_episodes(self) -> Tuple[str, bool]:
         """
-        Run episodes interactively with environment up until enough data is gathered.
-        :return: output message for epoch string, whether current model is the best so far.
-        """
+                Run episodes interactively with environment up until enough data is gathered.
+                :return: output message for epoch string, whether current model is the best so far.
+                """
         if self._data_saver is not None and self._config.data_saver_config.clear_buffer_before_episode:
             self._data_saver.clear_buffer()
+
+        frames = [] if self._config.tb_render_every_n_epochs != -1 and \
+            self._epoch % self._config.tb_render_every_n_epochs == 0 and \
+            self._writer is not None else None
         count_episodes = 0
         count_success = 0
+        episode_return = 0
         episode_returns = []
         while not self._enough_episodes_check(count_episodes):
             if self._data_saver is not None and self._config.data_saver_config.separate_raw_data_runs:
@@ -126,12 +138,15 @@ class Experiment:
             while experience.done == TerminationType.NotDone and not self._enough_episodes_check(count_episodes):
                 action = self._net.get_action(next_observation) if self._net is not None else None
                 experience, next_observation = self._environment.step(action)
+                episode_return += experience.info['unfiltered_reward'] \
+                    if 'unfiltered_reward' in experience.info.keys() else experience.reward
+                if frames is not None and 'frame' in experience.info.keys():
+                    frames.append(experience.info['frame'])
                 if self._data_saver is not None:
                     self._data_saver.save(experience=experience)
             count_success += 1 if experience.done.name == TerminationType.Success.name else 0
             count_episodes += 1
-            if 'return' in experience.info.keys():
-                episode_returns.append(experience.info['return'])
+            episode_returns.append(experience.info['return'] if 'return' in experience.info.keys() else episode_return)
         if self._data_saver is not None and self._config.data_saver_config.store_hdf5:
             self._data_saver.create_train_validation_hdf5_files()
         msg = f" {count_episodes} episodes"
@@ -143,6 +158,7 @@ class Experiment:
         msg += f" with return {return_distribution.mean: 0.3e} [{return_distribution.std: 0.2e}]"
         if self._writer is not None:
             self._writer.write_distribution(return_distribution, "episode return")
+            self._writer.write_gif(frames)
         best_checkpoint = False
         if self._max_mean_return is None or return_distribution.mean > self._max_mean_return:
             self._max_mean_return = return_distribution.mean
@@ -152,7 +168,7 @@ class Experiment:
     def run(self):
         for self._epoch in range(self._config.number_of_epochs):
             best_ckpt = False
-            msg = f'epoch: {self._epoch + 1} / {self._config.number_of_epochs}'
+            msg = f'{get_date_time_tag()} epoch: {self._epoch + 1} / {self._config.number_of_epochs}'
             if self._environment is not None:
                 output_msg, best_ckpt = self._run_episodes()
                 msg += output_msg
@@ -163,7 +179,7 @@ class Experiment:
                     )
                 msg += self._trainer.train(epoch=self._epoch, writer=self._writer)
             if self._evaluator is not None:  # if validation error is minimal then save best checkpoint
-                output_msg, best_ckpt = self._evaluator.evaluate(writer=self._writer)
+                output_msg, best_ckpt = self._evaluator.evaluate(epoch=self._epoch, writer=self._writer)
                 msg += output_msg
             if self._config.save_checkpoint_every_n != -1 and \
                     (self._epoch % self._config.save_checkpoint_every_n == 0 or
@@ -172,8 +188,16 @@ class Experiment:
             if best_ckpt and self._config.save_checkpoint_every_n != -1:
                 self.save_checkpoint(tag='best')
             cprint(msg, self._logger)
+        if self._trainer is not None:
+            self._trainer.data_loader.set_dataset()
         if self._evaluator is not None and self._config.evaluator_config.evaluate_extensive:
             self._evaluator.evaluate_extensive()
+
+        self._tester = Evaluator(config=self._config.tester_config, network=self._net) \
+            if self._config.tester_config is not None else None
+        if self._tester is not None:
+            output_msg, _ = self._tester.evaluate(epoch=self._epoch, writer=self._writer, tag='test')
+            cprint(f'Testing: {output_msg}', self._logger)
         cprint(f'Finished.', self._logger)
 
     def save_checkpoint(self, tag: str = ''):

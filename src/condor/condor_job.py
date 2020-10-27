@@ -27,18 +27,21 @@ class CondorJobConfig(Config):
     codebase_dir: str = f'{os.environ["HOME"]}/code/imitation-learning-codebase'
     cpus: int = 2
     gpus: int = 0
-    cpu_mem_gb: int = 17
+    cpu_mem_gb: int = 3
     disk_mem_gb: int = 52
+    priority: int = 0
     nice: bool = False
     wall_time_s: int = 15 * 60
     gpu_mem_mb: int = 1900
     black_list: Optional[List] = None
     green_list: Optional[List] = None
     use_green_list: bool = False
-    use_singularity: bool = True
-    singularity_file: str = sorted(glob.glob(f'{os.environ["PWD"]}/rosenvironment/singularity/*.sif'))[-1]
+    use_singularity: bool = False
+    singularity_dir: str = 'ubuntu'
+    singularity_file: str = ''
     check_if_ros_already_in_use: bool = False
     save_locally: bool = False
+    save_before_wall_time: bool = False
     extra_requirements: Optional[str] = None
 
     def __post_init__(self):
@@ -56,14 +59,26 @@ class CondorJobConfig(Config):
 
     def post_init(self):  # add default options
         if not self.output_path.startswith('/'):
-            self.output_path = os.path.join(self.codebase_dir, self.output_path)
+            self.output_path = os.path.join(get_data_dir(self.codebase_dir), self.output_path)
+        if self.use_singularity:  # set singularity directory to gluster or opal
+            if not self.singularity_dir.startswith('/'):
+                if os.path.isdir('/gluster/visics/kkelchte/singularity_images'):
+                    self.singularity_dir = os.path.join('/gluster/visics/kkelchte/singularity_images',
+                                                        self.singularity_dir)
+                else:
+                    self.singularity_dir = os.path.join('/esat/opal/kkelchte/singularity_images',
+                                                        self.singularity_dir)
+            if self.singularity_file == '':
+                self.singularity_file = sorted(glob.glob(f'{self.singularity_dir}/*'))[-1]
+            elif not self.singularity_file.startswith('/'):
+                self.singularity_file = os.path.join(self.singularity_dir, self.singularity_file)
+            assert os.path.isfile(self.singularity_file)
 
 
 class CondorJob:
 
     def __init__(self, config: CondorJobConfig):
         self._config = config
-        
 
         self.output_dir = os.path.basename(config.config_file).split('.')[0] if config.config_file != '' else \
             f'{get_date_time_tag()}_{strip_command(config.command)}'
@@ -81,6 +96,7 @@ class CondorJob:
 
         # job & machine specs
         self.specs = {
+            'priority': self._config.priority,
             'RequestCpus': self._config.cpus,
             'Request_GPUs': self._config.gpus,
             'RequestMemory': f'{self._config.cpu_mem_gb} G',
@@ -185,24 +201,44 @@ class CondorJob:
             self._original_output_path = f'{get_data_dir(os.environ["HOME"])}/{self._original_output_path}'
         config_dict['output_path'] = self.local_output_path
 
-        # TODO: make hacky solution clean, make relative path to hdf5 work
-        for key in ['trainer_config', 'evaluator_config']:
-            if key in config_dict.keys():
-                if 'data_loader_config' in config_dict[key]:
-                    if 'hdf5_file' in config_dict[key]['data_loader_config']:
-                        if not config_dict[key]['data_loader_config']['hdf5_file'].startswith('/'):
-                            config_dict[key]['data_loader_config']['hdf5_file'] = \
-                                os.path.join(self._original_output_path if 'models' not in self._original_output_path
-                                             else self._original_output_path.split('models')[0],
-                                             config_dict[key]['data_loader_config']['hdf5_file'])
+        # adjust config if hdf5 files are present and store original_to_new_location_tuples
+        original_to_new_location_tuples = []
+
+        def adjust_hdf5_files(hdf5_files: List[str]) -> List[str]:
+            hdf5_files = [os.path.join(get_data_dir(os.environ['HOME']), original_hdf5_file)
+                          if not original_hdf5_file.startswith('/') else original_hdf5_file
+                          for original_hdf5_file in hdf5_files]
+            new_hdf5_files = [
+                os.path.join(self.local_home, f"{len(original_to_new_location_tuples) + index}.hdf5")
+                for index in range(len(hdf5_files))
+            ]
+            original_to_new_location_tuples.extend(zip(hdf5_files, new_hdf5_files))
+            return new_hdf5_files
+
+        # Walk through config and search for hdf5_files tag to adjust
+        def search_for_key_and_adjust(config: dict) -> dict:
+            for key, value in config.items():
+                if key == 'hdf5_files':
+                    config[key] = adjust_hdf5_files(value)
+                elif isinstance(value, dict):
+                    config[key] = search_for_key_and_adjust(value)
+            return config
+        config_dict = search_for_key_and_adjust(config_dict)
 
         adjusted_config_file = os.path.join(self.output_dir, 'adjusted_config.yml')
         # store adjust config file in condor dir and make command point to adjust config file
         with open(adjusted_config_file, 'w') as f:
             yaml.dump(config_dict, f)
         self._config.command = f'{self._config.command.split("--config")[0]} --config {adjusted_config_file}'
-        # add some extra lines to create new output path
-        return f'mkdir -p {self.local_output_path} \n'
+
+        # add some extra lines to create new output path and copy hdf5 files
+        extra_lines = f'mkdir -p {self.local_output_path} \n'
+        extra_lines += f'cp -r {self._original_output_path}/* {self.local_output_path} 2>&1 >> /dev/null ' \
+                       f'| echo \'no original data\' \n'
+        for original_hdf5_file, new_hdf5_file in original_to_new_location_tuples:
+            extra_lines += f'echo copying \"{original_hdf5_file}\" \n'
+            extra_lines += f'cp {original_hdf5_file} {new_hdf5_file} \n'
+        return extra_lines
 
     def _add_lines_to_copy_local_data_back(self) -> str:
         lines = f'mkdir -p {self._original_output_path} \n'
@@ -210,26 +246,56 @@ class CondorJob:
         lines += f'rm -r {self.local_output_path} \n'
         return lines
 
+    def _add_lines_check_wall_time(self) -> str:
+        """lines checking the start time with the wall time
+        and potentially kill command so local saving is done before end
+        """
+        lines = "echo 'starting to wait for command to finish' \n"
+        lines += "CHECKPID=0 \n"
+        lines += "COUNT=0 \n" \
+                 f"mkdir -p {self._original_output_path} \n"
+        lines += f"while [ $CHECKPID -eq 0 " \
+                 f"-a $(date +%s) -lt $((STARTTIME + {self._config.wall_time_s} - 5 * 60)) ] ; do " \
+                 f"echo $((STARTTIME + {self._config.wall_time_s} - 5 * 60 - $(date +%s))) seconds to live \n "\
+                 f"sleep 60 \n kill -0 $PROCESSID >> /dev/null\n CHECKPID=$?\n COUNT=$((COUNT+1))\n " \
+                 f"if [ $((COUNT % 60)) = 59 ] ; then \n " \
+                 f"echo \'copying data back \' \n" \
+                 f"cp -r {self.local_output_path}/* {self._original_output_path} \n" \
+                 f"fi \n" \
+                 f"done\n"
+        lines += "if [ $CHECKPID == 0 ] ; then \n" \
+                 "kill -9 $PROCESSID \n echo 'kill process before end of walltime' \n " \
+                 "fake-call-to-raise-error \n" \
+                 "fi \n"
+        return lines
+
     def write_executable_file(self):
         with open(self.executable_file, 'w') as executable:
             executable.write('#!/bin/bash\n')
+            executable.write("STARTTIME=$(date +%s)\n")
             if self._config.check_if_ros_already_in_use and self._config.use_singularity:
                 executable.write(self._add_check_for_ros_lines())
             if self._config.save_locally:
                 executable.write(self._adjust_commands_config_to_save_locally())
             if self._config.use_singularity:
-                executable.write(
-                    f"/usr/bin/singularity exec --nv {self._config.singularity_file} "
-                    f"{os.path.join(self._config.codebase_dir, 'rosenvironment', 'entrypoint.sh')} "
-                    f"{self._config.command} "
-                    f">> {os.path.join(self.output_dir, 'singularity.output')} 2>&1 \n")
+                command = f"/usr/bin/singularity exec --nv {self._config.singularity_file} "
+                command += os.path.join(self._config.codebase_dir,
+                                        'rosenvironment' if os.path.basename(self._config.singularity_dir) == 'ubuntu'
+                                        else 'virtualenvironment',
+                                        'entrypoint.sh')
+                command += f" {self._config.command} >> {os.path.join(self.output_dir, 'singularity.output')} 2>&1 " \
+                           f"{'&' if self._config.save_before_wall_time else ''}\n"
+                executable.write(command)
             else:
                 executable.write(f'source {self._config.codebase_dir}/virtualenvironment/venv/bin/activate\n')
                 executable.write(f'export PYTHONPATH=$PYTHONPATH:{self._config.codebase_dir}\n')
                 if 'DATADIR' in os.environ.keys():
                     executable.write(f'export DATADIR={os.environ["DATADIR"]}\n')
                 executable.write(f'export HOME={os.environ["HOME"]}\n')
-                executable.write(f'{self._config.command}\n')
+                executable.write(f'{self._config.command} {"&" if self._config.save_before_wall_time else ""}\n')
+            if self._config.save_before_wall_time:
+                executable.write("PROCESSID=$! \n")
+                executable.write(self._add_lines_check_wall_time())
             executable.write("retVal=$? \n")
             executable.write("echo \"got exit code $retVal\" \n")
             executable.write(f"touch {self.output_dir}/FINISHED_$retVal \n")

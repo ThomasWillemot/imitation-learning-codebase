@@ -3,6 +3,7 @@ import time
 
 import torch
 import numpy as np
+from cv2 import cv2
 from dataclasses import dataclass
 from typing import Union, Any, Optional
 
@@ -36,8 +37,11 @@ class ArchitectureConfig(Config):
     initialisation_type: str = 'xavier'
     random_seed: int = 0
     device: str = 'cpu'
+    latent_dim: Union[int, str] = 'default'
+    vae: Union[bool, str] = 'default'
     finetune: bool = False
     dropout: Union[float, str] = 'default'
+    batch_normalisation: Union[bool, str] = 'default'
     dtype: str = 'default'
     log_std: Union[float, str] = 'default'
 
@@ -46,29 +50,22 @@ class BaseNet(nn.Module):
 
     def __init__(self, config: ArchitectureConfig, quiet: bool = True):
         super().__init__()
+        # input range from 0 -> 1 is expected, for range -1 -> 1 this field should state 'zero_centered'
+        self.input_scope = 'default'
+
         self.input_size = None
         self.output_size = None
         self.discrete = None
         self._config = config
         self.dtype = torch.float32 if config.dtype == 'default' else eval(f"torch.{config.dtype}")
-
-        if not quiet:
-            self._logger = get_logger(name=get_filename_without_extension(__file__),
-                                      output_path=config.output_path,
-                                      quiet=True)
-            cprint(f'Started.', self._logger)
-        self._checkpoint_output_directory = os.path.join(self._config.output_path, 'torch_checkpoints')
-        os.makedirs(self._checkpoint_output_directory, exist_ok=True)
-
-        self.extra_checkpoint_info = None
         self._device = torch.device(
             "cuda" if self._config.device in ['gpu', 'cuda'] and torch.cuda.is_available() else "cpu"
         )
-
         self.global_step = torch.as_tensor(0, dtype=torch.int32)
 
     def initialize_architecture(self):
         torch.manual_seed(self._config.random_seed)
+        torch.set_num_threads(1)
         for layer in self.modules():
             initialize_weights(layer, initialisation_type=self._config.initialisation_type)
 
@@ -80,36 +77,51 @@ class BaseNet(nn.Module):
             "cuda" if device in ['gpu', 'cuda'] and torch.cuda.is_available() else "cpu"
         ) if isinstance(device, str) else device
         try:
-            self.to(self._device)
+            for layer in self.modules():
+                layer.to(self._device)
         except AssertionError:
             cprint(f'failed to work on {self._device} so working on cpu', self._logger, msg_type=MessageType.warning)
             self._device = torch.device('cpu')
             self.to(self._device)
 
-    def forward(self, inputs: Union[torch.Tensor, np.ndarray, list, int, float], train: bool) -> torch.Tensor:
-        # adjust gradient saving
+    def set_mode(self, train: bool = False):
         if train:
             self.train()
         else:
             self.eval()
-        # preprocess inputs
+
+    def process_inputs(self, inputs: Union[torch.Tensor, np.ndarray, list, int, float]) -> torch.Tensor:
+        if isinstance(inputs, list):
+            inputs = torch.stack(inputs)
+        if len(self.input_size) == 3:
+            # check if 2D input is correct
+            # compare channel first / last for single image:
+            if len(inputs.shape) == 3 and inputs.shape[-1] == self.input_size[0]:
+                # in case it's channel last, assume single raw data input which requires preprocess:
+                # check for size
+                if inputs.shape[1] != self.input_size[1]:
+                    # resize with opencv
+                    inputs = cv2.resize(np.asarray(inputs), dsize=(self.input_size[1], self.input_size[2]),
+                                        interpolation=cv2.INTER_LANCZOS4)
+                    if self.input_size[0] == 1:
+                        inputs = inputs.mean(axis=-1, keepdims=True)
+                # check for scope
+                if inputs.max() > 1 or inputs.min() < 0:
+                    inputs += inputs.min()
+                    inputs /= inputs.max()
+                if self.input_scope == 'zero_centered':
+                    inputs *= 2
+                    inputs -= 1
+                # make channel first and add batch dimension
+                inputs = torch.as_tensor(inputs).permute(2, 0, 1).unsqueeze(0)
+
+        # create Tensors
         if not isinstance(inputs, torch.Tensor):
             try:
                 inputs = torch.as_tensor(inputs, dtype=self.dtype)
             except ValueError:
                 inputs = torch.stack(inputs).type(self.dtype)
         inputs = inputs.type(self.dtype)
-        # swap H, W, C --> C, H, W
-        if torch.argmin(torch.as_tensor(inputs.size())) != 0 \
-                and self.input_size[0] == inputs.size()[-1]\
-                and len(self.input_size) == len(inputs.size()):
-            inputs = inputs.permute(2, 0, 1)
-
-        # swap B, H, W, C --> B, C, H, W
-        if len(self.input_size) + 1 == len(inputs.size()) and \
-                torch.argmin(torch.as_tensor(inputs.size()[1:])) != 0 \
-                and self.input_size[0] == inputs.size()[-1]:
-            inputs = inputs.permute(0, 3, 1, 2)
 
         # add batch dimension if required
         if len(self.input_size) == len(inputs.size()):
@@ -139,6 +151,7 @@ class BaseNet(nn.Module):
         """
         :return: a dictionary with global_step and model_state of neural network.
         """
+        cprint(f'checksum: {self.get_checksum()}', self._logger)
         return {
             'global_step': self.global_step,
             'model_state': self.state_dict()

@@ -68,8 +68,8 @@ class Net(BaseNet):
         #self.dense_2 = nn.Linear(6272, 1)
 
         self.decoder = mlp_creator(sizes=[6272, 2056, self.output_size[0]],
-                                   activation=nn.ReLU,
-                                   output_activation=nn.Tanh,
+                                   activation=nn.ReLU(),
+                                   output_activation=nn.Tanh(),
                                    bias_in_last_layer=False)
 
     def feature_extract(self, inputs: torch.Tensor) -> torch.Tensor:
@@ -131,7 +131,8 @@ class Net(BaseNet):
         """
         Outputs steering action only
         """
-        inputs = super().forward(inputs=inputs, train=train)
+        self.set_mode(train)
+        inputs = self.process_inputs(inputs=inputs)
         if self._config.finetune:
             with torch.no_grad():
                 x4 = self.feature_extract(inputs)

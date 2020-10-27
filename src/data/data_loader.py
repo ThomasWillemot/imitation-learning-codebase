@@ -2,7 +2,9 @@
 
 """
 import os
+from warnings import warn
 from dataclasses import dataclass
+from glob import glob
 from typing import List, Generator, Optional
 
 import numpy as np
@@ -26,7 +28,9 @@ class DataLoaderConfig(Config):
     balance_over_actions: bool = False
     batch_size: int = 64
     subsample: int = 1
+    loop_over_hdf5_files: bool = False
     input_size: Optional[List[int]] = None
+    input_scope: Optional[str] = 'default'
 
     def post_init(self):  # add default options
         if self.data_directories is None:
@@ -36,6 +40,23 @@ class DataLoaderConfig(Config):
             self.input_size = []
         if self.hdf5_files is None:
             self.hdf5_files = []
+        if self.data_directories is not None and len(self.data_directories) != 0:
+            self.data_directories = [
+                os.path.join(get_data_dir(os.environ['HOME']), d) if not d.startswith('/') else d
+                for d in self.data_directories]
+            # check if raw_data is a subdirectory of d and fill in raw_data runs if this is the case.
+            data_directories = []
+            for d in self.data_directories:
+                if os.path.isdir(os.path.join(d, 'raw_data')):
+                    data_directories.extend(glob(f'{d}/raw_data/*'))
+                else:
+                    data_directories.append(d)
+            self.data_directories = data_directories
+        if self.hdf5_files is not None and len(self.hdf5_files) != 0:
+            self.hdf5_files = [
+                os.path.join(get_data_dir(os.environ['HOME']), hdf5_f) if not hdf5_f.startswith('/') else hdf5_f
+                for hdf5_f in self.hdf5_files
+            ]
 
     def iterative_add_output_path(self, output_path: str) -> None:
         if self.output_path is None:
@@ -43,14 +64,6 @@ class DataLoaderConfig(Config):
                 self.output_path = output_path
             else:  # if output path is provided by ModelConfig, the data should be found in the experiment directory
                 self.output_path = output_path.split('models')[0]
-        if self.data_directories is not None and len(self.data_directories) != 0 \
-                and not self.data_directories[0].startswith('/'):
-            self.data_directories = [os.path.join(get_data_dir(os.environ['HOME']), d) for d in self.data_directories]
-        if self.hdf5_files is not None and len(self.hdf5_files) != 0:
-            self.hdf5_files = [
-                    os.path.join(get_data_dir(os.environ['HOME']), hdf5_f) if not hdf5_f.startswith('/') else hdf5_f
-                    for hdf5_f in self.hdf5_files
-            ]
         for key, value in self.__dict__.items():
             if isinstance(value, Config):
                 value.iterative_add_output_path(output_path)
@@ -68,6 +81,7 @@ class DataLoader:
         self._num_runs = 0
         self._probabilities: List = []
         self.seed()
+        self._hdf5_file_index = -1
 
     def seed(self, seed: int = None):
         np.random.seed(self._config.random_seed) if seed is None else np.random.seed(seed)
@@ -79,23 +93,32 @@ class DataLoader:
             self._config.data_directories.append(os.path.join(self._config.output_path, 'raw_data', d))
         self._config.data_directories = list(set(self._config.data_directories))
 
-    def load_dataset(self, arrange_according_to_timestamp: bool = False):
+    def load_dataset(self):
         if len(self._config.hdf5_files) != 0:
-            for hdf5_file in self._config.hdf5_files:
-                self._dataset = load_dataset_from_hdf5(hdf5_file,
-                                                       input_size=self._config.input_size,
-                                                       dataset=self._dataset)
-            cprint(f'Loaded {len(self._dataset.observations)} from {self._config.hdf5_files}', self._logger,
-                   msg_type=MessageType.warning if len(self._dataset.observations) == 0 else MessageType.info)
+            if self._config.loop_over_hdf5_files:
+                self._dataset = Dataset()
+                self._hdf5_file_index += 1
+                self._hdf5_file_index %= len(self._config.hdf5_files)
+                while len(self._dataset) == 0:
+                    try:
+                        self._dataset.extend(load_dataset_from_hdf5(self._config.hdf5_files[self._hdf5_file_index],
+                                                                    input_size=self._config.input_size))
+                    except OSError:
+                        cprint(f'Failed to load {self._config.hdf5_files[self._hdf5_file_index]}', self._logger,
+                               msg_type=MessageType.warning)
+                        del self._config.hdf5_files[self._hdf5_file_index]
+                        self._hdf5_file_index %= len(self._config.hdf5_files)
+                cprint(f'Loaded {len(self._dataset)} datapoints from {self._config.hdf5_files[self._hdf5_file_index]}',
+                       self._logger,
+                       msg_type=MessageType.warning if len(self._dataset.observations) == 0 else MessageType.info)
+            else:
+                for hdf5_file in self._config.hdf5_files:
+                    self._dataset.extend(load_dataset_from_hdf5(hdf5_file,
+                                                                input_size=self._config.input_size))
+                cprint(f'Loaded {len(self._dataset)} datapoints from {self._config.hdf5_files}', self._logger,
+                       msg_type=MessageType.warning if len(self._dataset.observations) == 0 else MessageType.info)
         else:
-            directory_generator = tqdm(self._config.data_directories, ascii=True, desc=__name__) \
-                if len(self._config.data_directories) > 10 else self._config.data_directories
-            for directory in directory_generator:
-                run = load_run(directory, arrange_according_to_timestamp, input_size=self._config.input_size)
-                if len(run) != 0:
-                    self._dataset.extend(experiences=run)
-            cprint(f'Loaded {len(self._dataset)} data points from {len(self._config.data_directories)} directories',
-                   self._logger, msg_type=MessageType.warning if len(self._dataset) == 0 else MessageType.info)
+            self.load_dataset_from_directories(self._config.data_directories)
 
         if self._config.subsample != 1:
             self._dataset.subsample(self._config.subsample)
@@ -103,18 +126,35 @@ class DataLoader:
         if self._config.balance_over_actions:
             self._probabilities = balance_weights_over_actions(self._dataset)
 
+    def load_dataset_from_directories(self, directories: List[str] = None) -> Dataset:
+        directory_generator = tqdm(directories, ascii=True, desc=__name__) \
+            if len(directories) > 10 else directories
+        for directory in directory_generator:
+            run = load_run(directory, arrange_according_to_timestamp=False, input_size=self._config.input_size,
+                           scope=self._config.input_scope)
+            if len(run) != 0:
+                self._dataset.extend(experiences=run)
+        cprint(f'Loaded {len(self._dataset)} data points from {len(directories)} directories',
+               self._logger, msg_type=MessageType.warning if len(self._dataset) == 0 else MessageType.info)
+        return self._dataset
+
+    def empty_dataset(self) -> None:
+        self._dataset = Dataset()
+
     def set_dataset(self, ds: Dataset = None) -> None:
         if ds is not None:
             self._dataset = ds
         else:
             self._dataset = Dataset()
-            self.update_data_directories_with_raw_data()
-            self.load_dataset()
+#            self.update_data_directories_with_raw_data()
+#            self.load_dataset()
 
     def get_dataset(self) -> Dataset:
         return self._dataset
 
     def get_data_batch(self) -> Generator[Dataset, None, None]:
+        if len(self._dataset) == 0 or self._config.loop_over_hdf5_files:
+            self.load_dataset()
         index = 0
         while index < len(self._dataset):
             batch = Dataset()
@@ -124,7 +164,7 @@ class DataLoader:
             batch.actions = self._dataset.actions[index:end_index]
             batch.done = self._dataset.done[index:end_index]
             batch.rewards = self._dataset.rewards[index:end_index]
-            index += self._config.batch_size
+            index = index + self._config.batch_size if self._config.batch_size != -1 else len(self._dataset)
             yield batch
 
     def sample_shuffled_batch(self, max_number_of_batches: int = 1000) \
@@ -136,16 +176,14 @@ class DataLoader:
         :param dataset: list of runs with inputs, outputs and batches
         :return: yield a batch up until all samples are done
         """
-        if len(self._dataset) == 0:
-            msg = f'Cannot sample batch from dataset of size {len(self._dataset)}, ' \
-                  f'make sure you call DataLoader.load_dataset()'
-            cprint(msg, self._logger, msg_type=MessageType.error)
-            raise IOError(msg)
+        if len(self._dataset) == 0 or self._config.loop_over_hdf5_files:
+            self.load_dataset()
         # Get data indices:
         batch_count = 0
         while batch_count < min(len(self._dataset), max_number_of_batches * self._config.batch_size):
             sample_indices = np.random.choice(list(range(len(self._dataset))),
                                               size=self._config.batch_size,
+                                              replace=len(self._dataset) < self._config.batch_size,
                                               p=self._probabilities
                                               if len(self._probabilities) != 0 else None)
             batch = select(self._dataset, sample_indices)

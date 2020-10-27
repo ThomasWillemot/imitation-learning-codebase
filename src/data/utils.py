@@ -1,9 +1,9 @@
+import copy
 import os
-import warnings
 from copy import deepcopy
 from typing import List, Tuple, Union
 
-import cv2
+from cv2 import cv2
 import h5py
 import torch
 from PIL import Image
@@ -12,11 +12,12 @@ from tqdm import tqdm
 import matplotlib.pyplot as plt
 
 from src.core.data_types import Dataset
+from src.core.data_types import Experience
 
 #############################################################
 #  Helper functions to store data used by data_saver.py     #
 #############################################################
-from src.core.data_types import Experience
+from src.core.utils import get_data_dir
 
 
 def timestamp_to_filename(time_stamp_ms: int) -> str:
@@ -48,7 +49,7 @@ def store_array_to_file(data: np.ndarray, file_name: str, time_stamp: int = 0) -
         f.write(message)
 
 ##############################################################################
-#  Helper functions to data loading and preprocessing used by data_loader.py #
+#  Helper functions data loading and preprocessing used by data_loader.py #
 ##############################################################################
 
 
@@ -56,25 +57,40 @@ def filename_to_timestamp(filename: str) -> int:
     return int(os.path.basename(filename).split('.')[0])
 
 
-def load_and_preprocess_file(file_name: str, size: tuple = None) -> torch.Tensor:
+def load_and_preprocess_file(file_name: str, size: tuple = None, scope: str = 'default') -> torch.Tensor:
     """
     file_name: full path to image file
     size: tuple or list of 3 dimensions: (CHANNEL, WIDTH, HEIGHT) used with
+    range: 'default' ~ 0:1, 'uint8' ~ 0:255, 'zero_centered' ~ -1:1
     """
     data = Image.open(file_name, mode='r')
     if size is not None and len(size) != 0:
-        data = cv2.resize(np.asarray(data), dsize=(size[1], size[2]), interpolation=cv2.INTER_NEAREST)
+        data = cv2.resize(np.asarray(data), dsize=(size[1], size[2]), interpolation=cv2.INTER_LANCZOS4)
         if size[0] == 1:
             data = data.mean(axis=-1, keepdims=True)
-    data = np.array(data).astype(np.float32)  # uint8 -> float32
+    # Image PIL loads data in uint8 ==> divide by 255 to get float 0:1
+    data = np.array(data).astype(np.float32)/255.  # uint8 -> float32
+
+    if np.amin(data) < 0:
+        data -= np.amin(data)
     if np.amax(data) > 1:
-        data /= 255.  # 0:255 -> 0:1
-    assert np.amax(data) <= 1 and np.amin(data) >= 0
+        data /= np.amax(data)
+
+    if scope == 'zero_centered':
+        data *= 2
+        data -= 1
+
+    # check correct range
+    if scope == "default":
+        assert np.amax(data) <= 1 and np.amin(data) >= 0
+    elif scope == "zero_centered":
+        assert 0 <= np.amax(data) <= 1 and -1 <= np.amin(data) < 0
+
     data = data.swapaxes(1, 2).swapaxes(0, 1)  # make channel first
     return torch.as_tensor(data, dtype=torch.float32)
 
 
-def load_data_from_directory(directory: str, size: tuple = None) -> Tuple[list, list]:
+def load_data_from_directory(directory: str, size: tuple = None, scope: str = 'default') -> Tuple[list, list]:
     """
     directory: full path containing the observations
     size: tuple or list of 3 dimensions: (CHANNEL, WIDTH, HEIGHT)
@@ -83,7 +99,8 @@ def load_data_from_directory(directory: str, size: tuple = None) -> Tuple[list, 
     data = []
     for f in sorted(os.listdir(directory)):
         data.append(load_and_preprocess_file(file_name=os.path.join(directory, f),
-                                             size=size))
+                                             size=size,
+                                             scope=scope))
         time_stamps.append(filename_to_timestamp(f))
     return time_stamps, data
 
@@ -107,9 +124,9 @@ def load_data_from_file(filename: str, size: tuple = ()) -> Tuple[list, list]:
     return time_stamps, data
 
 
-def load_data(dataype: str, directory: str, size: tuple = None) -> Tuple[list, list]:
+def load_data(dataype: str, directory: str, size: tuple = None, scope: str = 'default') -> Tuple[list, list]:
     if os.path.isdir(os.path.join(directory, dataype)):
-        return load_data_from_directory(os.path.join(directory, dataype), size=size)
+        return load_data_from_directory(os.path.join(directory, dataype), size=size, scope=scope)
     elif os.path.isfile(os.path.join(directory, dataype)):
         return load_data_from_file(os.path.join(directory, dataype), size=size)
     else:
@@ -147,16 +164,17 @@ def torch_append(destination: torch.Tensor, source: torch.Tensor) -> torch.Tenso
     return torch.cat((destination, source), 0)
 
 
-def load_run(directory: str, arrange_according_to_timestamp: bool = False, input_size: List[int] = None) \
-        -> List[Experience]:
+def load_run(directory: str, arrange_according_to_timestamp: bool = False, input_size: List[int] = None,
+             scope: str = 'default') -> List[Experience]:
     run = {}
     time_stamps = {}
     for x in os.listdir(directory):
-        try:
-            k = x if not x.endswith('.data') else x[:-5]
-            time_stamps[x], run[k] = load_data(x, directory, size=input_size if k == 'observation' else None)
-        except:
-            pass
+        #try:
+        k = x if not x.endswith('.data') else x[:-5]
+        time_stamps[x], run[k] = load_data(x, directory, size=input_size if k == 'observation' else None,
+                                           scope=scope if k == 'observation' else None)
+        #except:
+        #    pass
     if arrange_according_to_timestamp:
         run = arrange_run_according_timestamps(run, time_stamps)
     if len(run.keys()) == 0:
@@ -277,14 +295,14 @@ def create_hdf5_file_from_dataset(filename: str, dataset: Dataset) -> None:
                          [dataset.observations, dataset.actions, dataset.rewards, dataset.done]):
         if None not in data:
             h5py_dataset[tag] = np.asarray([o.numpy() for o in data])
+    h5py_file.close()
 
 
-def load_dataset_from_hdf5(filename: str, input_size: List[int] = None, dataset: Dataset = Dataset()) -> Dataset:
+def load_dataset_from_hdf5(filename: str, input_size: List[int] = None) -> h5py.Group:
     h5py_file = h5py.File(filename, 'r')
     if input_size is not None and input_size != []:
         assert tuple(h5py_file['dataset']['observations'][0].shape) == tuple(input_size)
-    dataset.extend(h5py_file['dataset'])
-    return dataset
+    return h5py_file['dataset']
 
 
 def add_run_to_h5py(h5py_file: h5py.File, run: str) -> h5py.File:
@@ -351,3 +369,93 @@ def select(data: Union[list, torch.Tensor, np.ndarray, Dataset], indices: List[i
         )
     else:  # assuming Tensor or numpy array
         return data.squeeze()[indices]
+
+###################################################################
+#  Helper functions to create or load HDF5 file                   #
+###################################################################
+
+
+def parse_binary_maps(observations: List[torch.Tensor], invert: bool = False) -> List[np.ndarray]:
+    '''
+    create binary maps from observations based on R-channel which is 1 on background and 0 at blue line.
+    :param observations: [channels (RGB) x height x width ]
+    :param invert: bool switch high - low binary values
+    :return: binary maps : [1 x height x width ]
+    '''
+    observations = [o.numpy() for o in observations]
+    binary_images = [
+        cv2.threshold(o.mean(axis=0), 0.5, 1, cv2.THRESH_BINARY if not invert else cv2.THRESH_BINARY_INV)[1]
+        for o in observations
+    ]
+    return binary_images
+
+
+def set_binary_maps_as_target(dataset: Dataset, invert: bool = False) -> Dataset:
+    binary_maps = parse_binary_maps(copy.deepcopy(dataset.observations), invert=invert)
+    dataset.actions = [torch.as_tensor(b) for b in binary_maps]
+    return dataset
+
+
+def augment_background_noise(dataset: Dataset, p: float = 0.0) -> Dataset:
+    """
+    parse background and fore ground. Give fore ground random color and background noise.
+    :param p: probability for each image to be augmented with background
+    :param dataset: augmented dataset in which observations are adjusted with new back- and foregrounds
+    :return: augmented dataset
+    """
+    binary_images = parse_binary_maps(copy.deepcopy(dataset.observations))
+    augmented_dataset = copy.deepcopy(dataset)
+    augmented_dataset.observations = []
+    num_channels = dataset.observations[0].shape[0]
+    for index, image in tqdm(enumerate(binary_images)):
+        if np.random.binomial(1, p):
+            new_shape = (*image.shape, num_channels)
+            bg = np.random.uniform(-1, 1, size=new_shape)
+            fg = np.zeros(new_shape) + np.random.uniform(-1, 1)
+            three_channel_mask = np.stack([image] * num_channels, axis=-1)
+            new_img = torch.as_tensor((-(three_channel_mask - 1) * fg + three_channel_mask * bg)).permute(2, 0, 1)
+        else:
+            new_img = dataset.observations[index]
+        augmented_dataset.observations.append(new_img)
+    return augmented_dataset
+
+
+def augment_background_textured(dataset: Dataset, texture_directory: str,
+                                p: float = 0.0, p_empty: float = 0.0) -> Dataset:
+    """
+    parse background and fore ground. Give fore ground random color and background a crop of a textured image.
+    :param p_empty: in case of augmentation with texture, potentially augment without any foreground and empty action map (hacky!)
+    :param p: probability for each image to be augmented with background
+    :param dataset: augmented dataset in which observations are adjusted with new back- and foregrounds
+    :param texture_directory: directory with sub-directories for each texture
+    :return: augmented dataset
+    """
+    # 1. load texture image paths and keep in RAM
+    if not texture_directory.startswith('/'):
+        texture_directory = os.path.join(get_data_dir(os.environ['HOME']), texture_directory)
+    texture_paths = [os.path.join(texture_directory, sub_directory, image)
+                     for sub_directory in os.listdir(texture_directory)
+                     if os.path.isdir(os.path.join(texture_directory, sub_directory))
+                     for image in os.listdir(os.path.join(texture_directory, sub_directory))]
+    assert len(texture_paths) != 0
+    # 2. parse binary images to extract fore- and background
+    binary_images = parse_binary_maps(copy.deepcopy(dataset.observations))
+    augmented_dataset = copy.deepcopy(dataset)
+    augmented_dataset.observations = []
+    num_channels = dataset.observations[0].shape[0]
+    for index, image in tqdm(enumerate(binary_images)):
+        if np.random.binomial(1, p):
+            new_shape = (*image.shape, num_channels)
+            bg_image = np.random.choice(texture_paths)
+            bg = load_and_preprocess_file(bg_image,
+                                          size=(num_channels, image.shape[0], image.shape[1])).permute(1, 2, 0).numpy()
+            if np.random.binomial(1, p_empty):
+                fg = np.zeros(new_shape) + np.random.uniform(-1, 1)
+                three_channel_mask = np.stack([image] * num_channels, axis=-1)
+                new_img = torch.as_tensor((-(three_channel_mask - 1) * fg + three_channel_mask * bg)).permute(2, 0, 1)
+            else:
+                new_img = bg.permute(2, 0, 1)
+                augmented_dataset.observations.append(new_img)
+        else:
+            augmented_dataset.observations.append(dataset.observations[index])
+    return augmented_dataset
