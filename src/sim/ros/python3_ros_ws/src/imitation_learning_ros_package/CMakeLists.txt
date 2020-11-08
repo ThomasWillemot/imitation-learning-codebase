@@ -43,6 +43,7 @@ catkin_install_python(PROGRAMS
   rosnodes/ros_expert.py
   rosnodes/teleop_twist_keyboard.py
   rosnodes/waypoint_indicator.py
+  rosnodes/waypoint_extractor.py
   DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION})
 
 install(DIRECTORY launch
