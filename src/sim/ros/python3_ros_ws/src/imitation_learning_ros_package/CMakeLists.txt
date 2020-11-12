@@ -13,7 +13,11 @@ find_package(catkin REQUIRED COMPONENTS
     image_transport
     message_generation
 )
-find_package(Boost REQUIRED COMPONENTS system signals thread)
+find_package(Boost REQUIRED COMPONENTS
+	system
+ 	signals
+	thread
+	)
 include_directories(SYSTEM ${Boost_INCLUDE_DIRS}
                            ${catkin_INCLUDE_DIRS}
                            ${OpenCV_INCLUDE_DIRS}
@@ -22,6 +26,12 @@ add_message_files(
     FILES
     RosReward.msg
 )
+
+add_service_files(
+	FILES
+	SendRelCor.srv
+)
+
 generate_messages(
   DEPENDENCIES
   std_msgs
@@ -44,6 +54,8 @@ catkin_install_python(PROGRAMS
   rosnodes/teleop_twist_keyboard.py
   rosnodes/waypoint_indicator.py
   rosnodes/waypoint_extractor.py
+  rosnodes/waypointclient.py
+  rosnodes/picture_publish.py
   DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION})
 
 install(DIRECTORY launch

@@ -7,7 +7,7 @@ from src.core.config_loader import Parser
 from src.core.data_types import TerminationType
 from src.sim.common.environment import EnvironmentConfig
 from src.sim.ros.src.ros_environment import RosEnvironment
-
+from imitation_learning_ros_package.srv import SendRelCor
 warnings.filterwarnings("ignore")
 environment: RosEnvironment
 
