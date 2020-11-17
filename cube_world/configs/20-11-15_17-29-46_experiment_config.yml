@@ -1,0 +1,133 @@
+commit: 666144b0542a4d42dcc8b5efb75ea73d434e682a
+data_saver_config:
+  clear_buffer_before_episode: false
+  max_size: -1
+  output_path: /home/thomas/code/imitation-learning-codebase/cube_world
+  saving_directory: /home/thomas/code/imitation-learning-codebase/cube_world/raw_data/20-11-15_17-29-46_keyboard
+  saving_directory_tag: keyboard
+  separate_raw_data_runs: true
+  store: true
+  store_hdf5: false
+  store_on_ram_only: false
+  subsample_hdf5: 1
+  training_validation_split: 0.9
+environment_config:
+  factory_key: ROS
+  max_number_of_steps: -1
+  normalize_observations: false
+  normalize_rewards: false
+  observation_clipping: -1
+  output_path: /home/thomas/code/imitation-learning-codebase/cube_world
+  reward_clipping: -1
+  ros_config:
+    action: ''
+    actor_configs:
+    - !!python/object:src.sim.ros.python3_ros_ws.src.imitation_learning_ros_package.rosnodes.actors.ActorConfig
+      commit: ''
+      file: src/sim/ros/config/actor/keyboard_turtlebot_sim.yml
+      name: keyboard
+      output_path: /home/thomas/code/imitation-learning-codebase/cube_world
+      specs:
+        command_topic: /actor/keyboard/cmd_vel
+        message: ' Reading from the keyboard  and Publishing to Twist! ---------------------------
+          Moving around: u    i    o j    k    l m    ,    . CTRL-C to quit '
+        moveBindings:
+          ',':
+          - -1
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          .:
+          - -1
+          - 0
+          - 0
+          - 0
+          - 0
+          - 1
+          ':':
+          - -1
+          - 0
+          - 0
+          - 0
+          - 0
+          - -1
+          i:
+          - 1
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          j:
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 1
+          l:
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - -1
+          o:
+          - 1
+          - 0
+          - 0
+          - 0
+          - 0
+          - -1
+          u:
+          - 1
+          - 0
+          - 0
+          - 0
+          - 0
+          - 1
+        rate_fps: 10
+        speed: 0.2
+        topicBindings:
+          f: /fsm/overtake
+          g: /fsm/go
+        turn: 0.8
+      store: true
+    max_update_wait_period_s: 10
+    observation: forward_camera
+    output_path: /home/thomas/code/imitation-learning-codebase/cube_world
+    ros_launch_config:
+      control_mapping: true
+      control_mapping_config: keyboard
+      fsm: true
+      fsm_config: takeover_run
+      gazebo: true
+      output_path: /home/thomas/code/imitation-learning-codebase/cube_world
+      random_seed: 123
+      robot_display: true
+      robot_mapping: true
+      robot_name: turtlebot_sim
+      store: true
+      waypoint_indicator: true
+      world_name: cube_world
+      x_pos: 0.0
+      y_pos: 0.0
+      yaw_or: 1.57
+      z_pos: 0.0
+    step_rate_fps: 30
+    store: true
+    store_action: true
+    store_reward: false
+    visible_xterm: true
+  store: true
+load_checkpoint_found: true
+number_of_episodes: 3
+number_of_epochs: 1
+output_path: /home/thomas/code/imitation-learning-codebase/cube_world
+save_checkpoint_every_n: -1
+store: true
+tb_render_every_n_epochs: -1
+tensorboard: false
+train_every_n_steps: -1

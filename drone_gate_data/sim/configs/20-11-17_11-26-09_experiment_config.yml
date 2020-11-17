@@ -1,0 +1,151 @@
+commit: 666144b0542a4d42dcc8b5efb75ea73d434e682a
+data_saver_config:
+  clear_buffer_before_episode: false
+  max_size: -1
+  output_path: /home/thomas/code/imitation-learning-codebase/drone_gate_data/sim
+  saving_directory: /home/thomas/code/imitation-learning-codebase/drone_gate_data/sim/raw_data/20-11-17_11-26-09_joystick
+  saving_directory_tag: joystick
+  separate_raw_data_runs: true
+  store: true
+  store_hdf5: false
+  store_on_ram_only: false
+  subsample_hdf5: 1
+  training_validation_split: 0.9
+environment_config:
+  factory_key: ROS
+  max_number_of_steps: -1
+  normalize_observations: false
+  normalize_rewards: false
+  observation_clipping: -1
+  output_path: /home/thomas/code/imitation-learning-codebase/drone_gate_data/sim
+  reward_clipping: -1
+  ros_config:
+    action: ros_expert
+    actor_configs:
+    - !!python/object:src.sim.ros.python3_ros_ws.src.imitation_learning_ros_package.rosnodes.actors.ActorConfig
+      commit: ''
+      file: src/sim/ros/config/actor/keyboard_drone_sim.yml
+      name: joystick
+      output_path: /home/thomas/code/imitation-learning-codebase/drone_gate_data/sim
+      specs:
+        command_topic: /actor/keyboard/cmd_vel
+        message: ' Reading from the keyboard  and Publishing to Twist! ---------------------------
+          Moving around: u (roll left)   i (up)         o (roll right)  p (take off)
+          j (turn left)   k (straight)   l (turn right)  m (go) m (land)        ;
+          (down)
+
+          space (take over) e (enable motors)'
+        moveBindings:
+          ;:
+          - 0
+          - 0
+          - -1
+          - 0
+          - 0
+          - 0
+          J:
+          - 1
+          - 0
+          - 0
+          - 0
+          - 0
+          - 1
+          L:
+          - 1
+          - 0
+          - 0
+          - 0
+          - 0
+          - -1
+          i:
+          - 0
+          - 0
+          - 1
+          - 0
+          - 0
+          - 0
+          j:
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - 1
+          k:
+          - 1
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          l:
+          - 0
+          - 0
+          - 0
+          - 0
+          - 0
+          - -1
+          o:
+          - 0
+          - -1
+          - 0
+          - 0
+          - 0
+          - 0
+          u:
+          - 0
+          - 1
+          - 0
+          - 0
+          - 0
+          - 0
+        rate_fps: 10
+        serviceBindings:
+        - key: p
+          message: true
+          name: /enable_motors
+          type: EnableMotors
+        speed: 0.5
+        topicBindings:
+          ' ': /fsm/overtake
+          f: /fsm/finish
+          m: /fsm/go
+          r: /fsm/reset
+        turn: 1.0
+      store: true
+    max_update_wait_period_s: 10
+    observation: forward_camera
+    output_path: /home/thomas/code/imitation-learning-codebase/drone_gate_data/sim
+    ros_launch_config:
+      control_mapping: true
+      control_mapping_config: joystick
+      fsm: true
+      fsm_config: takeover_run
+      gazebo: true
+      output_path: /home/thomas/code/imitation-learning-codebase/drone_gate_data/sim
+      random_seed: 123
+      robot_display: true
+      robot_mapping: true
+      robot_name: drone_sim
+      store: true
+      waypoint_indicator: true
+      world_name: drone_race
+      x_pos: 0.0
+      y_pos: 0.0
+      yaw_or: 1.57
+      z_pos: 1.0
+    step_rate_fps: 30
+    store: true
+    store_action: true
+    store_reward: false
+    visible_xterm: true
+  store: true
+load_checkpoint_found: true
+number_of_episodes: 1
+number_of_epochs: 1
+output_path: /home/thomas/code/imitation-learning-codebase/drone_gate_data/sim
+save_checkpoint_every_n: -1
+store: true
+tb_render_every_n_epochs: -1
+tensorboard: false
+train_every_n_steps: -1
