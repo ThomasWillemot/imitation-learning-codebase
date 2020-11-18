@@ -2,7 +2,7 @@ import os
 import shutil
 import unittest
 
-from src.core.utils import get_filename_without_extension
+from src.core.utils import get_filename_without_extension, get_to_root_dir
 from src.core.data_types import TerminationType
 from src.sim.common.environment import EnvironmentConfig
 from src.sim.ros.src.ros_environment import RosEnvironment
@@ -25,10 +25,11 @@ class TestRobots(unittest.TestCase):
                     'gazebo': 'sim' in robot_name,
                     'random_seed': 123,
                     'robot_name': robot_name,
-                    'world_name': 'debug_turtle' if 'sim' in robot_name else 'empty',
+                  #  'world_name': 'debug_turtle' if 'sim' in robot_name else 'empty',
+                    'world_name': 'drone_race',
                     'robot_display': True,
-                    'x_pos': 0.0,
-                    'y_pos': 0.0,
+                    'x_pos': 1.0,
+                    'y_pos': 1.0,
                     'yaw_or': 1.57,
                     'z_pos': 0.0,
                 },
@@ -73,4 +74,6 @@ class TestRobots(unittest.TestCase):
 
 
 if __name__ == '__main__':
+    get_to_root_dir()
     unittest.main()
+

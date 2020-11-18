@@ -11,15 +11,11 @@ import time
 import numpy as np
 import rospy
 from sensor_msgs.msg import *
-#from nav_msgs.msg import Odometry
 sys.path.append('src/sim/ros/test')
 from std_msgs.msg import *
 from imitation_learning_ros_package.srv import SendRelCor, SendRelCorResponse
 from common_utils import get_fake_image
 import cv2
-#from src.core.logger import get_logger, cprint, MessageType
-#from src.core.utils import camelcase_to_snake_format, get_filename_without_extension
-#from src.sim.ros.src.utils import get_output_path
 
 
 class WaypointExtractor:
@@ -135,7 +131,6 @@ class WaypointExtractor:
         s = rospy.Service('rel_cor', SendRelCor, self.handle_cor_req)
         print("Waiting for request")
 
-
     def image_subscriber(self):
         rospy.Subscriber("image_topic", Image, self.extract_waypoint)
 
@@ -145,9 +140,7 @@ class WaypointExtractor:
         self.rel_cor_server()
         print("Should start the service to deliver 3d coordinates")
         rospy.spin()
-# rospy.wait_for_service('/enable_motors')
-# enable_motors_service = rospy.ServiceProxy('/enable_motors', EnableMotors)
-# enable_motors_service.call(True)
+
 if __name__ == "__main__":
     waypoint_extractor = WaypointExtractor()
     waypoint_extractor.run()

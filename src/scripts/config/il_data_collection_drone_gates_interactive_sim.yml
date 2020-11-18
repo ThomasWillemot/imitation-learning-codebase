@@ -19,10 +19,10 @@ environment_config:
       fsm: true
       control_mapping: true
       waypoint_indicator: true
-      control_mapping_config: joystick
+      control_mapping_config: keyboard
       world_name: drone_race
-      x_pos: 0.0
-      y_pos: 0.0
+      x_pos: 1.0
+      y_pos: 1.0
       z_pos: 1.0
       yaw_or: 1.57
       gazebo: true
@@ -32,4 +32,4 @@ environment_config:
 data_saver_config:
   store_hdf5: false
   separate_raw_data_runs: true
-  saving_directory_tag: joystick
+  saving_directory_tag: keyboard
