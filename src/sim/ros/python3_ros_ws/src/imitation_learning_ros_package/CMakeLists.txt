@@ -22,6 +22,11 @@ add_message_files(
     FILES
     RosReward.msg
 )
+
+add_service_files(
+    FILES
+    SendRelCor.srv
+)
 generate_messages(
   DEPENDENCIES
   std_msgs
