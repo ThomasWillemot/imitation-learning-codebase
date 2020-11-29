@@ -8,9 +8,7 @@ import numpy as np
 from cv_bridge import CvBridge
 import rospy
 from sensor_msgs.msg import *
-import message_filters
 from tf2_msgs.msg import *
-
 sys.path.append('src/sim/ros/test')
 from std_msgs.msg import *
 from imitation_learning_ros_package.srv import SendRelCor, SendRelCorResponse
@@ -66,12 +64,14 @@ class WaypointExtractor:
                 if bin_im[row, column] > 0:
                     if current_width_start == -1:
                         current_width_start = column
-                        prev_pix = 1
                     elif prev_pix == 1:
                         current_width += 1
+                    elif current_width == 0:
+                        current_width_start = column
+                    prev_pix = 1
                 else:
                     prev_pix = 0
-            if current_width > max_width_row and current_width_start > 3:
+            if current_width > max_width_row and current_width_start > 0:
                 max_width_row = current_width
                 max_width_x = current_width_start
                 max_width_y = row
@@ -79,11 +79,10 @@ class WaypointExtractor:
                 cone_found = True
             if current_width_start > -1:
                 prev_row = 1
+            current_width = 0
+            current_width_start = -1
             row -= 1
-        print(max_width_x)
-        print(max_width_y)
-        print(max_width_row)
-        return [max_width_x-424, +max_width_y+400, max_width_row]
+        return [max_width_x-424, -max_width_y+400, max_width_row]
 
     def get_cone_3d_location(self, cone_width_px, cone_width_m, conetop_coor, tune_factor):
         if cone_width_px > 0: #only updates when cone detected
@@ -109,7 +108,7 @@ class WaypointExtractor:
         current_image = cv2.remap(cv_im, self.map1, self.map2, interpolation=cv2.INTER_LINEAR,
                                        borderMode=cv2.BORDER_CONSTANT)  # Remap fisheye to normal picture
         # Cone segmentation
-        bin_im = self.get_cone_binary(current_image, treshold=100)
+        bin_im = self.get_cone_binary(current_image, treshold=80)
 
         #self.counter = self.counter + 1  # Counter to save picture under new name
         #if self.counter == 1:
