@@ -15,8 +15,8 @@ class WaypointClient:
         self.sleeptime = 1000 #ms to wait
         self.fig, self.ax = plt.subplots()
         self.ln, = plt.plot([], [], 'ro')
-        self.ax.set_xlim(-50, 50)
-        self.ax.set_ylim(0, 50)
+        self.ax.set_xlim(-10, 10)
+        self.ax.set_ylim(0, 15)
         print('Waiting for service')
         rospy.wait_for_service('rel_cor')
         print('service found')
