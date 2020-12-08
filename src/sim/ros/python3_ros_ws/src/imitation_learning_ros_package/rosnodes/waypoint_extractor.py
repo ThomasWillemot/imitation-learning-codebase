@@ -7,13 +7,15 @@
 import numpy as np
 from cv_bridge import CvBridge
 import rospy
+from geometry_msgs.msg import TransformStamped, Transform, Vector3
 from sensor_msgs.msg import *
 from tf2_msgs.msg import *
 sys.path.append('src/sim/ros/test')
 from imitation_learning_ros_package.srv import SendRelCor, SendRelCorResponse
 import cv2
 from std_msgs.msg import *
-
+from geometry_msgs import *
+import time
 
 class WaypointExtractor:
 
@@ -31,25 +33,24 @@ class WaypointExtractor:
         self.y_1 = -1
         self.x_2 = 0
         self.y_2 = 0
-        self.image_rec = 0
+        self.x_orig = 0
+        self.y_orig = 0
+        self.z_orig = 0
+        self.imagexite_rec = 0
         rospy.init_node('waypoint_extractor_server')
 
     # Function to extract the cone out of an image. The part of the cone(s) are binary ones, the other parts are 0.
     # inputs: image and color of cone
     # output: binary of cone
-    def get_cone_binary(self, current_image, treshold):
-        image_shape = current_image.shape
-        binary_image = np.zeros((image_shape[0], image_shape[1]))
-        for i in range(image_shape[0]):  # Each row
-            for k in range(image_shape[1]):  # Each column
-                if current_image[i, k] > treshold:
-                    binary_image[i, k] = 255
-        return binary_image
+    def get_cone_binary(self, current_image, threshold):
+        binary_image = cv2.threshold(current_image, threshold, 255, cv2.THRESH_BINARY)
+        return binary_image[1]
 
     # Extract the 2d location in the image after segmentation.
     # TODO: loops of get_cone_binary and this function can be written in one.
 
     def get_cone_2d_location(self, bin_im):
+        start_time = time.time()
         cone_found = False
         im_size = bin_im.shape
         max_width_row = 0
@@ -76,7 +77,7 @@ class WaypointExtractor:
                 max_width_row = current_width
                 max_width_x = current_width_start
                 max_width_y = row
-            if prev_row == 1 and current_width_start == -1:
+            if prev_row == 1 and current_width_start == -1 and max_width_row >2 :
                 cone_found = True
             if current_width_start > -1:
                 prev_row = 1
@@ -84,6 +85,7 @@ class WaypointExtractor:
             current_width_start = -1
             row -= 1
         max_width_row +=1
+        print("--- %s seconds ---" % (time.time() - start_time))
         return [max_width_x-424+int(np.ceil(max_width_row/2)), -max_width_y+400, max_width_row] #counting starts at zero
 
     # 3d coordinate estimation using
@@ -109,19 +111,21 @@ class WaypointExtractor:
         self.z_cor = rotated_coor[2]
 
     def get_depth_triang(self, x_fish1, x_fish2, y_fish1, y_fish2):
-        baseline = 0.64  # 6.4mm???
+        baseline = 0.064  # 6.4mm???
         disparity = x_fish1-x_fish2
+        if disparity == 0:
+            disparity =1
         x = baseline*(x_fish1)/disparity
         y = baseline*y_fish1/disparity
         z = baseline*286/disparity
-        return [x, y, z]
+        return [z, y, x]
     # Extracts the waypoints (3d location) out of the current image.
     def extract_waypoint_1(self, image):
         cv_im = self.bridge.imgmsg_to_cv2(image, desired_encoding='passthrough')  # Load images to cv
         current_image = cv2.remap(cv_im, self.map1, self.map2, interpolation=cv2.INTER_LINEAR,
                                     borderMode=cv2.BORDER_CONSTANT)  # Remap fisheye to normal picture
         # Cone segmentation
-        bin_im = self.get_cone_binary(current_image, treshold=80)
+        bin_im = self.get_cone_binary(current_image, threshold=80)
         # Positioning in 2D of cone parts
         loc_2d = self.get_cone_2d_location(bin_im)
         # Get the position and width of the cone
@@ -130,18 +134,14 @@ class WaypointExtractor:
         # Remap 2D locations to 3D using width
         self.x_1 = loc_2d[0]
         self.y_1 = loc_2d[1]
-        print('Orininal:')
-        print(self.get_cone_3d_location(max_width, 0.18, [loc_2d[0], loc_2d[1]], 366))
+        #[self.x_orig,self.y_orig,self.z_orig] = self.get_cone_3d_location(max_width, 0.18, [loc_2d[0], loc_2d[1]], 366)
         # tunefactor calculated by distance[m]*pixels of ob/seize obj[m]
     def extract_waypoint_2(self, image):
         cv_im = self.bridge.imgmsg_to_cv2(image, desired_encoding='passthrough')  # Load images to cv
         current_image = cv2.remap(cv_im, self.map1, self.map2, interpolation=cv2.INTER_LINEAR,
                                        borderMode=cv2.BORDER_CONSTANT)  # Remap fisheye to normal picture
         # Cone segmentation
-        bin_im = self.get_cone_binary(current_image, treshold=80)
-        #self.counter = self.counter + 1  # Counter to save picture under new name
-        #print(self.counter)
-        #cv2.imwrite("all_pics/" + str(self.counter) + ".jpg", cv_im)  # Write images to folder
+        bin_im = self.get_cone_binary(current_image, threshold=80)
         # Positioning in 2D of cone parts
         loc_2d = self.get_cone_2d_location(bin_im)
         # Get the position and width of the cone
@@ -152,20 +152,20 @@ class WaypointExtractor:
         self.y_2 = loc_2d[1]
 
     # Using the rotation angels of the camera to correct for the drone.
-    def update_angles(self, angle):
-        #update de angles and translation info
-        #calculations will be done when service is called
-        x = 0
+    def update_angles(self, data):
+        # update de angles and translation info
+        print(data.transforms[0].transform.rotation)
         #TODO update coordinates using these sensor values
 
     # Handles the service requests.
     def handle_cor_req(self, req):
         #should also transform last coordinates
         print("Request received.")
-        coor = self.get_depth_triang(self.x_1, self.y_1, self.x_2, self.y_2)
+        coor = self.get_depth_triang(self.x_1, self.x_2, self.y_1, self.y_2)
         print('Triangulation: ')
         print([coor[0], coor[1], coor[2]])
         return SendRelCorResponse(coor[0], coor[1], coor[2])
+        #return SendRelCorResponse(self.x_orig, self.y_orig, self.z_orig)
 
     #  Service for delivery of current relative coordinates
     def rel_cor_server(self):

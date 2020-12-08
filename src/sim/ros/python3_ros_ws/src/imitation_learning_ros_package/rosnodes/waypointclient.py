@@ -11,12 +11,13 @@ class WaypointClient:
         self.x_vals = []
         self.y_vals = []
         self.z_vals = []
+        self.plot_time = []
         self.counter = 0
-        self.sleeptime = 1000 #ms to wait
+        self.sleeptime = 200 #ms to wait
         self.fig, self.ax = plt.subplots()
-        self.ln, = plt.plot([], [], 'ro')
-        self.ax.set_xlim(-10, 10)
-        self.ax.set_ylim(0, 15)
+        self.ln, = plt.plot([], [], 'r')
+        self.ax.set_xlim(0, 200)
+        self.ax.set_ylim(0, 4)
         print('Waiting for service')
         rospy.wait_for_service('rel_cor')
         print('service found')
@@ -26,12 +27,13 @@ class WaypointClient:
     def animate(self, not_used):
         try:
             resp1 = self.get_rel_cor()
+            self.plot_time.append(self.counter)
             self.x_vals.append(resp1.x)
             self.y_vals.append(resp1.y)
             self.z_vals.append(resp1.z)
         except rospy.ServiceException as e:
             print("Service call failed: %s" % e)
-        self.ln.set_data(self.x_vals, self.z_vals)
+        self.ln.set_data(self.plot_time, self.z_vals)
         self.counter += 1
 
     # Run the plotter using the data of the service.
