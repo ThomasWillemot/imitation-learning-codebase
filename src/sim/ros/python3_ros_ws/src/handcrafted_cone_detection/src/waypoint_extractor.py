@@ -204,30 +204,6 @@ class WaypointExtractor:
         return [max_width_x - 400 + int(np.ceil(max_width_row / 2)), -max_width_y + 424,
                 max_width_row]  # counting starts at zero
 
-    # 3d coordinate estimation using
-    def get_cone_3d_location(self, cone_width_px, cone_width_m, conetop_coor, tune_factor):
-        x_cor = 0
-        y_cor = 0
-        z_cor = -1  # do not update if z remains -1 TODO
-        if cone_width_px > 0:  # only updates when cone detected
-            # position relative to the camera in meters.
-            z_cor = cone_width_m * tune_factor / cone_width_px
-            x_cor = conetop_coor[0] * z_cor / tune_factor
-            y_cor = conetop_coor[1] * z_cor / tune_factor
-        return [z_cor, -x_cor, y_cor]
-
-    def rotate_coordinates(self, coor, x_angle, z_angle):
-        rotation_matrix = np.array([[np.cos(x_angle), -1 * np.sin(z_angle), 0],
-                                    [np.cos(x_angle) * np.sin(z_angle), np.cos(x_angle) * np.cos(z_angle),
-                                     -1 * np.sin(x_angle)],
-                                    [np.sin(x_angle) * np.sin(z_angle), np.sin(x_angle) * np.cos(z_angle),
-                                     np.cos(x_angle)]])
-        rotated_coor = rotation_matrix.dot(coor)
-        # TODO Should have a return instead of assinment
-        self.x_cor = rotated_coor[0]
-        self.y_cor = rotated_coor[1]
-        self.z_cor = rotated_coor[2]
-
     def get_depth_triang(self, x_fish1, x_fish2, y_fish1, y_fish2):
         baseline = 0.064  # 6.4mm???
         disparity = x_fish1 - x_fish2
@@ -236,7 +212,7 @@ class WaypointExtractor:
         x = baseline * x_fish1 / disparity
         y = baseline * y_fish1 / disparity
         z = baseline * 286 / disparity
-        return [z, -x, y]
+        return [z, -x, y] #order of axis and right dimensions
 
     # Extracts the waypoints (3d location) out of the current image.
     def extract_waypoint_1(self, image):
@@ -253,8 +229,6 @@ class WaypointExtractor:
         # Remap 2D locations to 3D using width
         self.x_1 = loc_2d[0]
         self.y_1 = loc_2d[1]
-        # [self.x_orig,self.y_orig,self.z_orig] = self.get_cone_3d_location(max_width, 0.18, [loc_2d[0], loc_2d[1]], 366)
-        # tunefactor calculated by distance[m]*pixels of ob/seize obj[m]
 
     def extract_waypoint_2(self, image):
         cv_im = self.bridge.imgmsg_to_cv2(image, desired_encoding='passthrough')  # Load images to cv
@@ -271,19 +245,10 @@ class WaypointExtractor:
         self.x_2 = loc_2d[0]
         self.y_2 = loc_2d[1]
 
-    # Using the rotation angels of the camera to correct for the drone.
-    def update_angles(self, data):
-        # update de angles and translation info
-        print(data.transforms[0].transform.rotation)
-        # TODO update coordinates using these sensor values
-
     # Handles the service requests.
     def handle_cor_req(self, req):
         # should also transform last coordinates
-        print("Request received.")
         coor = self.get_depth_triang(self.x_1, self.x_2, self.y_1, self.y_2)
-        print('Triangulation: ')
-        print([coor[0], coor[1], coor[2]])
         return SendRelCorResponse(coor[0], coor[1], coor[2])
         # return SendRelCorResponse(self.x_orig, self.y_orig, self.z_orig)
 
@@ -296,7 +261,6 @@ class WaypointExtractor:
     def image_subscriber(self):
         rospy.Subscriber("/camera/fisheye1/image_raw", Image, self.extract_waypoint_1)
         rospy.Subscriber("/camera/fisheye2/image_raw", Image, self.extract_waypoint_2)
-        rospy.Subscriber("/tf", TFMessage, self.update_angles)
 
     # Starts all needed functionalities
     def run(self):

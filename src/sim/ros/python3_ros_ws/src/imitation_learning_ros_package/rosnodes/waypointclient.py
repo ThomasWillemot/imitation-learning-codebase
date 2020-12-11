@@ -33,7 +33,7 @@ class WaypointClient:
             self.z_vals.append(resp1.z)
         except rospy.ServiceException as e:
             print("Service call failed: %s" % e)
-        self.ln.set_data(self.plot_time, self.z_vals)
+        self.ln.set_data(self.plot_time, self.x_vals)
         self.counter += 1
 
     # Run the plotter using the data of the service.
