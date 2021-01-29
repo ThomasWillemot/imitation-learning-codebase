@@ -1,0 +1,4 @@
+world_name: drone_race
+max_duration: 300
+delay_evaluation: 1
+waypoint_reached_distance: 4

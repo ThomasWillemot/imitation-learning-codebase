@@ -1,0 +1,4 @@
+world_name: drone_race
+max_duration: 60
+delay_evaluation: 0.1
+

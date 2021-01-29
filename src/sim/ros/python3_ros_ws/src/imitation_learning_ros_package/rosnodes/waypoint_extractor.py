@@ -44,48 +44,86 @@ class WaypointExtractor:
     # inputs: image and color of cone
     # output: binary of cone
     def get_cone_binary(self, current_image, threshold):
-        binary_image = cv2.threshold(current_image, threshold, 255, cv2.THRESH_BINARY)
+        binary_image = cv2.threshold(current_image, threshold, 1, cv2.ADAPTIVE_THRESH_MEAN_C)
         return binary_image[1]
 
     # Extract the 2d location in the image after segmentation.
     # TODO: loops of get_cone_binary and this function can be written in one.
     def get_cone_2d_location(self, bin_im):
+        row_sum = np.sum(bin_im, axis=0)
+        i = 0
+        while row_sum[i] > 1 and i < 847:
+            bin_im[i, :] = np.zeros(800)
+            i += 1
+        row_sum = np.sum(bin_im, axis=0)
         cone_found = False
-        im_size = bin_im.shape
-        max_width_row = 0
-        max_width_x = -1
-        max_width_y = -1
-        current_width_start = -1
-        current_width = 0
-        prev_pix = 0
-        row = im_size[0] - 1
-        prev_row = 0
+        cone_row = 0
+        max_row = 0
+        row = 847  # start where no drone parts are visible in image
         while not cone_found and row >= 0:
-            for column in range(im_size[1]):
-                if bin_im[row, column] > 0:
-                    if current_width_start == -1:
-                        current_width_start = column
-                    elif prev_pix == 1:
-                        current_width += 1
-                    elif current_width == 0:
-                        current_width_start = column
-                    prev_pix = 1
-                else:
-                    prev_pix = 0
-            if current_width > max_width_row and current_width_start > 0:
-                max_width_row = current_width
-                max_width_x = current_width_start
-                max_width_y = row
-            if prev_row == 1 and current_width_start == -1 and max_width_row > 2:
+            if row_sum[row] >= max_row:
+                cone_row = row
+                max_row = row_sum[row]
+            else:
                 cone_found = True
-            if current_width_start > -1:
-                prev_row = 1
-            current_width = 0
-            current_width_start = -1
             row -= 1
-        max_width_row += 1
-        return [max_width_x - 400 + int(np.ceil(max_width_row / 2)), -max_width_y + 424,
-                max_width_row]  # counting starts at zero
+
+        current_start = 0
+        max_start = 0
+        max_width = 0
+        current_width = 0
+        for col_index in range(799):
+            if bin_im[cone_row, col_index] == 0:
+                if current_width > max_width:
+                    max_width = current_width
+                    max_start = current_start
+                current_width = 0
+                current_start = 0
+            else:
+                if current_start == 0:
+                    current_start = col_index
+                current_width += 1
+
+        return [max_start + int(np.ceil(max_width / 2)) - 400, -cone_row + 424, max_width]
+
+    def get_cone_2d_location_sum(self, bin_im):
+        row_sum = np.sum(bin_im, axis=1)
+        i = 0
+        while row_sum[i] > 1:
+            bin_im[i, :] = np.zeros(800)
+            i += 1
+        row_sum = np.sum(bin_im, axis=1)
+        cone_found = False
+        cone_row = 0
+        max_row = 0
+        row = 847
+        while not cone_found:
+            if row_sum[row] >= max_row:
+                cone_row = row
+                max_row = row_sum[row]
+            else:
+                cone_found = True
+            row -= 1
+
+        current_start = 0
+        max_start = 0
+        max_width = 0
+        current_width = 0
+        for col_index in range(799):
+            if bin_im[cone_row,col_index] == 0:
+                if current_width > max_width:
+                    max_width = current_width
+                    max_start = current_start
+                current_width = 0
+                current_start = 0
+            else:
+                if current_start == 0:
+                    current_start = col_index
+                current_width += 1
+
+
+        return [max_start+int(np.ceil(max_width/2)) - 400, -cone_row + 424, max_width]
+
 
     def get_cone_2d_speedup(self, bin_im, prev_coor):
         if prev_coor[2] == 0:
@@ -192,7 +230,7 @@ class WaypointExtractor:
                 max_width_row = current_width
                 max_width_x = current_width_start
                 max_width_y = row
-            if prev_row == 1 and current_width_start == -1 and max_width_row > 2:
+            if prev_row == 1 and current_width_start == -1 and max_width_row > 10:
                 cone_found = True
             if current_width_start > -1:
                 prev_row = 1
@@ -229,7 +267,7 @@ class WaypointExtractor:
         self.z_cor = rotated_coor[2]
 
     def get_depth_triang(self, x_fish1, x_fish2, y_fish1, y_fish2):
-        baseline = 0.064  # 6.4mm???
+        baseline = 0.064  # 6.4mm
         disparity = x_fish1 - x_fish2
         if disparity == 0:
             disparity = 1
@@ -243,33 +281,41 @@ class WaypointExtractor:
         cv_im = self.bridge.imgmsg_to_cv2(image, desired_encoding='passthrough')  # Load images to cv
         current_image = cv2.remap(cv_im, self.map1, self.map2, interpolation=cv2.INTER_LINEAR,
                                   borderMode=cv2.BORDER_CONSTANT)  # Remap fisheye to normal picture
+        path = 'gate_rec/'+str(self.counter) + '_1.jpg'
+        cv2.imwrite(path, current_image)
         # Cone segmentation
-        bin_im = self.get_cone_binary(current_image, threshold=80)
+        #bin_im = self.get_cone_binary(current_image, threshold=80)
         # Positioning in 2D of cone parts
-        loc_2d = self.get_cone_2d_location(bin_im)
+        #loc_2d = self.get_cone_2d_location(bin_im)
         # Get the position and width of the cone
-        max_width = loc_2d[2]  # Max width detected, assumption biggest object is the cone.
+        #max_width = loc_2d[2]  # Max width detected, assumption biggest object is the cone.
         # Index of middle of max width
         # Remap 2D locations to 3D using width
-        self.x_1 = loc_2d[0]
-        self.y_1 = loc_2d[1]
+        #self.x_1 = loc_2d[0]
+        #self.y_1 = loc_2d[1]
         # [self.x_orig,self.y_orig,self.z_orig] = self.get_cone_3d_location(max_width, 0.18, [loc_2d[0], loc_2d[1]], 366)
         # tunefactor calculated by distance[m]*pixels of ob/seize obj[m]
 
     def extract_waypoint_2(self, image):
         cv_im = self.bridge.imgmsg_to_cv2(image, desired_encoding='passthrough')  # Load images to cv
+        path = 'gate_rec/' + str(self.counter) + '_2.jpg'
+        self.counter += 1
+        cv2.imwrite(path, cv_im)
+
         current_image = cv2.remap(cv_im, self.map1, self.map2, interpolation=cv2.INTER_LINEAR,
                                   borderMode=cv2.BORDER_CONSTANT)  # Remap fisheye to normal picture
+        cv2.imwrite(path, current_image)
+
         # Cone segmentation
-        bin_im = self.get_cone_binary(current_image, threshold=80)
+        #bin_im = self.get_cone_binary(current_image, threshold=80)
         # Positioning in 2D of cone parts
-        loc_2d = self.get_cone_2d_location(bin_im)
+        #loc_2d = self.get_cone_2d_location(bin_im)
         # Get the position and width of the cone
-        max_width = loc_2d[2]  # Max width detected, assumption biggest object is the cone.
+        #max_width = loc_2d[2]  # Max width detected, assumption biggest object is the cone.
         # Index of middle of max width
         # Remap 2D locations to 3D using width
-        self.x_2 = loc_2d[0]
-        self.y_2 = loc_2d[1]
+        #self.x_2 = loc_2d[0]
+        #self.y_2 = loc_2d[1]
 
     # Using the rotation angels of the camera to correct for the drone.
     def update_angles(self, data):
@@ -296,7 +342,7 @@ class WaypointExtractor:
     def image_subscriber(self):
         rospy.Subscriber("/camera/fisheye1/image_raw", Image, self.extract_waypoint_1)
         rospy.Subscriber("/camera/fisheye2/image_raw", Image, self.extract_waypoint_2)
-        rospy.Subscriber("/tf", TFMessage, self.update_angles)
+        #rospy.Subscriber("/tf", TFMessage, self.update_angles)
 
     # Starts all needed functionalities
     def run(self):
