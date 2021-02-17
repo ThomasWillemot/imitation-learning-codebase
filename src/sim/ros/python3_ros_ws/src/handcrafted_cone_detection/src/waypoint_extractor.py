@@ -1,4 +1,4 @@
-#!/usr/bin/python3
+#!/usr/bin/python3.8
 """Extract waypoints out of a single image.
     Has two functionolities
         Image retrieval: calculates 3d location based on an image
@@ -15,6 +15,7 @@ from std_msgs.msg import *
 from geometry_msgs import *
 from std_srvs.srv import Trigger
 from handcrafted_cone_detection.srv import SendRelCor, SendRelCorResponse
+from handcrafted_cone_detection.msg import ConeImgLoc
 
 
 class WaypointExtractor:
@@ -22,9 +23,9 @@ class WaypointExtractor:
     def __init__(self):
 
         rospy.init_node('waypoint_extractor_server')
-
         self.bridge = CvBridge()
         dim = (848, 800)
+        self.threshold = 180
         k = np.array(
             [[285.95001220703125, 0.0, 418.948486328125], [0.0, 286.0592956542969, 405.756103515625], [0.0, 0.0, 1.0]])
         d = np.array(
@@ -44,24 +45,30 @@ class WaypointExtractor:
         self.image1_buffer = []
         self.image2_buffer = []
         self.image_stamp = rospy.Time(0)
-
         self._init_fsm_handshake_srv()
-        self.recent_bin_im = np.zeros((1,1))
-
+        self.pub = rospy.Publisher('cone_coordin', ConeImgLoc, queue_size=10)
+        self.thresh_pub = rospy.Publisher('threshold_im', Image, queue_size=10)
     # Function to extract the cone out of an image. The part of the cone(s) are binary ones, the other parts are 0.
     # inputs: image and color of cone
     # output: binary of cone
     def get_cone_binary(self, current_image, threshold):
-        binary_image = cv2.threshold(current_image, threshold, 1, cv2.ADAPTIVE_THRESH_MEAN_C)
+        binary_image = cv2.threshold(current_image, threshold, 255, cv2.ADAPTIVE_THRESH_MEAN_C)
         return binary_image[1]
 
     # Extract the 2d location in the image after segmentation.
-    def get_cone_2d_location(self, bin_im):
+    def get_cone_2d_location(self, bin_im, left):
         row_sum = np.sum(bin_im, axis=1)
         i = 0
+
         while row_sum[i] > 1 and i < 799:
             bin_im[i, :] = np.zeros(848)
             i += 1
+
+        airrow = 0
+        for row_idx in range(799):
+            if row_sum[row_idx] > 400 * 255:
+                airrow = row_idx
+        bin_im[1:airrow, :] = 0
         row_sum = np.sum(bin_im, axis=1)
         cone_found = False
         cone_row = 0
@@ -69,7 +76,7 @@ class WaypointExtractor:
         row = 799  # start where no drone parts are visible in image
         cone_started = False
         while not cone_found and row >= 0:
-            if row_sum[row] >= max_row and row_sum[row] > 4:
+            if row_sum[row] >= max_row and row_sum[row] > 4*255:
                 cone_row = row
                 max_row = row_sum[row]
                 cone_started = True
@@ -92,7 +99,9 @@ class WaypointExtractor:
                 if current_start == 0:
                     current_start = col_index
                 current_width += 1
-
+        if left:
+            self.image_publisher(max_start, cone_row, max_width)
+            self.threshol_image_publish(bin_im, max_start, cone_row, max_width)
         return [max_start + int(np.ceil(max_width / 2)) - 424, -cone_row + 400, max_width]
 
     def get_depth_triang(self, im_coor_1, im_coor_2):
@@ -113,17 +122,22 @@ class WaypointExtractor:
         return np.array([x_cor, y_cor, z_cor])
 
     # Extracts the waypoints (3d location) out of the current image.
-    def extract_waypoint(self, image):
+    def extract_waypoint(self, image, left):
         print("Extract wp")
         cv_im = self.bridge.imgmsg_to_cv2(image, desired_encoding='passthrough')  # Load images to cv
+
         rect_image = cv2.remap(cv_im, self.map1, self.map2, interpolation=cv2.INTER_LINEAR,
                                borderMode=cv2.BORDER_CONSTANT)  # Remap fisheye to normal picture
+        cut_off = 335
+        rect_image[848 - cut_off:848, :] = 0  # set the drone frame as zeros. Should not be detected as cone.
+
         # Cone segmentation
-        bin_im = self.get_cone_binary(rect_image, threshold=150)
-        bin_im[510:848, :] = np.zeros((290, 848)) # set the drone frame as zeros. Should not be detected as cone.
-        self.recent_bin_im = bin_im
+        bin_im = self.get_cone_binary(rect_image, threshold=self.threshold)
+
+
+
         # Positioning in 2D of cone parts
-        loc_2d = self.get_cone_2d_location(bin_im)
+        loc_2d = self.get_cone_2d_location(bin_im, left)
         return loc_2d
 
     # update the median filter with length 3
@@ -185,22 +199,32 @@ class WaypointExtractor:
         '''
         self.image2_buffer.append(image)
 
-    def image_publisher(self):
-        pub = rospy.Publisher('binary_images',Image, queue_size=10)
-        rate = rospy.Rate(60)
-        br = CvBridge()
-        while not rospy.is_shutdown():
-            pub.publish(br.cv2_to_imgmsg(self.recent_bin_im))
-            rate.sleep()
+    def threshol_image_publish(self,image,max_start,cone_row,max_width):
+        resolution = (800, 848)
+        frame = np.array(image)
+        frame = cv2.circle(frame, (max_start + int(max_width/2), cone_row), int(max_width/2), 255, 5)
+        image = Image()
+        image.data = frame.astype(np.uint8).flatten().tolist()
+        image.height = resolution[0]
+        image.width = resolution[1]
+        image.encoding = 'mono8'
+        image.step = resolution[1]
+        self.thresh_pub.publish(image)
+
+    def image_publisher(self, x_coor, y_coor, width):
+        cone_coor1 = ConeImgLoc()
+        cone_coor1.x_pos = np.int32(x_coor+int(width/2))
+        cone_coor1.y_pos = np.int32(y_coor)
+        cone_coor1.cone_width = np.int16(width)
+        self.pub.publish(cone_coor1)
 
     def run(self):
         '''Starts all needed functionalities + Main loop
         '''
         self.image_subscriber()
         self.rel_cor_server()
-        self.image_publisher()
-        while not rospy.is_shutdown():
 
+        while not rospy.is_shutdown():
             if self.image1_buffer and self.image2_buffer:
                 image1 = self.image1_buffer.pop()
                 image2 = self.image2_buffer.pop()
@@ -217,8 +241,9 @@ class WaypointExtractor:
                 self.image1_buffer.clear()
                 self.image2_buffer.clear()
 
-                image_coor_1 = self.extract_waypoint(image1)
-                image_coor_2 = self.extract_waypoint(image2)
+                image_coor_1 = self.extract_waypoint(image1, 1)
+                image_coor_2 = self.extract_waypoint(image2, 0)
+
                 relat_coor = self.get_depth_triang(image_coor_1, image_coor_2)
                 if 5 > relat_coor[0] > 0:  # only update if in range of 5 meter
                     self.update_median(relat_coor)
