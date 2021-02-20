@@ -24,21 +24,24 @@ class Net(BaseNet):
                                   quiet=False)
         if not quiet:
             cprint(f'Started.', self._logger)
-        self.input_size = (3, 200, 200)
+        self.input_size = (3, 800, 848)
         self.output_size = (3,)
         self.discrete = False
         self.dropout = nn.Dropout(p=config.dropout) if config.dropout != 'default' else None
         self.encoder = nn.Sequential(
-            nn.Conv2d(3, 16, 11, stride=2),
+            nn.Conv2d(3, 8, 11, stride=2),
             nn.ReLU(),
-            nn.Conv2d(16, 32, 7, stride=2),
+            nn.MaxPool2d(2, stride=2),
+            nn.Conv2d(8, 32, 7, stride=2),
             nn.ReLU(),
+            nn.MaxPool2d(2, stride=2),
             nn.Conv2d(32, 64, 5, stride=2),
             nn.ReLU(),
+            nn.MaxPool2d(2, stride=2),
             nn.Conv2d(64, 128, 3, stride=2),
             nn.ReLU()
         )
-        self.decoder = mlp_creator(sizes=[12800, 1024, 128, self.output_size[0]],
+        self.decoder = mlp_creator(sizes=[3200, 1024, 128, self.output_size[0]],
                                    activation=nn.ReLU(),
                                    output_activation=nn.Identity(),
                                    bias_in_last_layer=False)

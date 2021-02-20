@@ -7,7 +7,7 @@ camera_sensor:
   stats:
     height: 800
     width: 848
-    depth: 1
+    depth: 3
 position_sensor:
   topic: /ground_truth/state
   type: Odometry

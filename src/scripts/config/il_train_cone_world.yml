@@ -1,4 +1,4 @@
-output_path: cone_world
+output_path: /media/thomas/Elements/training_nn
 number_of_epochs: 60
 episode_runner_config:
   number_of_episodes: -1
@@ -13,22 +13,22 @@ architecture_config:
   log_std: default
 trainer_config:
   optimizer: SGD
-  weight_decay: 0.001
+  weight_decay: 0.0001
   learning_rate: 0.01
   factory_key: BASE
   data_loader_config:
-    hdf5_files: [data_collection_gazebo/train.hdf5]
+    hdf5_files: [/media/thomas/Elements/data_collection_gazebo/train.hdf5]
     random_seed: 123
     balance_over_actions: false
-    batch_size: 1
+    batch_size: 16
   criterion: MSELoss
-  device: cpu
+  device: cuda
 evaluator_config:
   data_loader_config:
-    hdf5_files: [data_collection_gazebo/validation.hdf5]
+    hdf5_files: [/media/thomas/Elements/data_collection_gazebo/validation.hdf5]
     random_seed: 123
     balance_over_actions: false
-    batch_size: 1
+    batch_size: 16
   criterion: MSELoss
   device: cpu
 tensorboard: true

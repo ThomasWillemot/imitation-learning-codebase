@@ -115,15 +115,30 @@ class TestConeSpawn(unittest.TestCase):
         model_state.pose.orientation.w = quaternion_from_euler((0, 0, yaw))
         self._set_model_state(model_state)
 
+    def test_generate_annotation_cone(self):
+        position = np.array([-1, 0, 1, 0, 0, 0])
+        annotations = self.generate_annotation_cone(position)
+        self.assertEqual(annotations[0], 1)
+        self.assertEqual(annotations[1], 0)
+        self.assertEqual(annotations[2], -1)
+
     # Generate the cone 3d location from the angles and distance.
+    # Rotations are performed around XYZ, in that order
     def generate_annotation_cone(self, position):
-        distance = np.sqrt(position[0]**2 + position[1]**2 + position[2]**2)
-        alfa = position[3]
-        beta = 0
-        x = np.cos(alfa)*distance
-        y = np.sin(beta)*distance
-        z = np.sin(alfa)*distance
-        return np.array([x, y, z])
+        yaw = position[5]
+        roll = position[3]
+        pitch = position[4]
+
+        rotation_roll = np.array([[1, 0, 0], [0, np.cos(roll), -1 * np.sin(roll)], [0, np.sin(roll), np.cos(roll)]])
+
+        rotation_pitch = np.array(
+            [[np.cos(pitch), 0, np.sin(pitch)], [0, 1, 0], [-1 * np.sin(pitch), 0, np.cos(pitch)]])
+
+        rotation_yaw = np.array([[np.cos(yaw), -1 * np.sin(yaw), 0], [np.sin(yaw), np.cos(yaw), 0], [0, 0, 1]])
+        rotation_matrix = np.matmul(np.matmul(rotation_roll, rotation_pitch), rotation_yaw)
+        coordin_in = np.array([-1 * position[0], -1 * position[1], -1 * position[2]])
+        coordin_out = coordin_in.dot(rotation_matrix)
+        return coordin_out
 
     def tearDown(self) -> None:
         self.ros_process.terminate()
