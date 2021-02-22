@@ -70,16 +70,16 @@ class DataCollectionGazebo:
         pitch = position[4]
         yaw = position[5]
         model_state.pose.orientation.x, model_state.pose.orientation.y, model_state.pose.orientation.z, \
-        model_state.pose.orientation.w = quaternion_from_euler((roll, pitch, yaw)) #around x y z axis
+        model_state.pose.orientation.w = quaternion_from_euler((roll, pitch, yaw)) # around x y z axis
         self._set_model_state(model_state)
 
         # send command to change drone pos
         # unpause client + take image
         # pause client
     def generate_image(self,total_data):
-        testposition = np.array([[-2,1,1,0,0,0]])
+        test_position = np.array([[-2,1,1,0,0,0]])
         for i in range(total_data):
-            testposition = np.concatenate((testposition,np.array([[-4,0,1,i*np.pi/18,i*np.pi/18,0]])),axis=0)
+            test_position = np.concatenate((test_position,np.array([[-4,0,1,i*np.pi/18,i*np.pi/18,0]])),axis=0)
         model_name = rospy.get_param('/robot/model_name')
         print(model_name)
         self._set_model_state.wait_for_service()
@@ -97,7 +97,7 @@ class DataCollectionGazebo:
             random_y = random_x * np.random.rand() - 0.5
             random_z = random_x * np.random.rand() + 0.5
             position = np.array([random_x, random_y, random_z, roll, pitch, yaw])
-            #position = testposition[data_collect_amount]
+            #position = test_position[data_collect_amount]
             # make changes in gazebo
 
             self._unpause_client(EmptyRequest())
@@ -111,7 +111,7 @@ class DataCollectionGazebo:
                 while image.header.seq == prev_seq_nb:
                     image = rospy.wait_for_message('/forward/camera/image', Image)
                     position_gazebo = rospy.wait_for_message('/gazebo/model_states', ModelStates)
-                #Read out the quadrotor positions
+                # Read out the quadrotor positions
                 index_drone = position_gazebo.name.index(model_name)
                 pose_gazebo = position_gazebo.pose[index_drone].position
                 quat = position_gazebo.pose[index_drone].orientation
