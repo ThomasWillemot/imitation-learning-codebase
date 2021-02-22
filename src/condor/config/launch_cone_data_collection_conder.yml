@@ -12,7 +12,7 @@ job_configs:
     priority: -10
     use_singularity: true
     check_if_ros_already_in_use: false
-    save_locally: true
+    save_locally: false
     extra_requirements: ( Mips >= 26000 )
 number_of_jobs:
   - 1
