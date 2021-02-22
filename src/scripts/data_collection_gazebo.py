@@ -1,6 +1,9 @@
 #!/usr/bin/python3.8
 import os
+import shutil
+
 import rospy
+from networkx.readwrite.tests.test_yaml import yaml
 from sensor_msgs.msg import Image
 from src.core.utils import get_filename_without_extension, get_data_dir
 from src.core.data_types import ProcessState, Experience, TerminationType
@@ -16,7 +19,7 @@ from cv_bridge import CvBridge
 import time
 from scipy.spatial.transform import Rotation as R
 from src.data.data_saver import DataSaver, DataSaverConfig
-
+from src.core.config_loader import Config, Parser
 # Class for data collection in a gazebo world.
 # Co
 class DataCollectionGazebo:
@@ -157,6 +160,17 @@ class DataCollectionGazebo:
 
 
 if __name__ == "__main__":
+    arguments = Parser().parse_args()
+    config_file = arguments.config
+    if arguments.rm:
+        with open(config_file, 'r') as f:
+            configuration = yaml.load(f, Loader=yaml.FullLoader)
+        if not configuration['output_path'].startswith('/'):
+            configuration['output_path'] = os.path.join(get_data_dir(os.environ['HOME']), configuration['output_path'])
+        shutil.rmtree(configuration['output_path'], ignore_errors=True)
+
+
     data_col = DataCollectionGazebo()
     amount_of_images = 10
     data_col.generate_image(amount_of_images)
+    data_col.finish_collection()
