@@ -2,16 +2,16 @@ output_path: cone_world
 mode: data_collection
 job_configs:
   - command: python3.8 src/scripts/data_collection_gazebo.py
-    codebase_dir: /users/visics/kkelchte/code/imitation-learning-codebase
+    codebase_dir: /users/students/r0667559/code/imitation-learning-codebase
     cpus: 11
-    gpus: 1
-    cpu_mem_gb: 25
-    disk_mem_gb: 52
-    wall_time_s: 60 * 60
-    nice: true
+    gpus: 0
+    cpu_mem_gb: 4
+    disk_mem_gb: 8
+    wall_time_s: 10 * 60
+    nice: false
     priority: -10
     use_singularity: true
-    check_if_ros_already_in_use: true
+    check_if_ros_already_in_use: false
     save_locally: true
     extra_requirements: ( Mips >= 26000 )
 number_of_jobs:
