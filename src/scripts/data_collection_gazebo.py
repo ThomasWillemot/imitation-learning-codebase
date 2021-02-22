@@ -2,7 +2,7 @@
 import os
 import rospy
 from sensor_msgs.msg import Image
-from src.core.utils import get_filename_without_extension
+from src.core.utils import get_filename_without_extension, get_data_dir
 from src.core.data_types import ProcessState, Experience, TerminationType
 from src.sim.ros.src.process_wrappers import RosWrapper
 from src.sim.ros.test.common_utils import TopicConfig, TestPublisherSubscriber
@@ -22,7 +22,7 @@ from src.data.data_saver import DataSaver, DataSaverConfig
 class DataCollectionGazebo:
 
     def __init__(self):
-        self.output_dir = f'/media/thomas/Elements/{get_filename_without_extension(__file__)}'
+        self.output_dir = f'{get_data_dir(os.environ["CODEDIR"])}/{get_filename_without_extension(__file__)}'
         print(self.output_dir)
         os.makedirs(self.output_dir, exist_ok=True)
         config = {
