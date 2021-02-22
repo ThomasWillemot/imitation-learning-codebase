@@ -25,7 +25,7 @@ from src.core.config_loader import Config, Parser
 class DataCollectionGazebo:
 
     def __init__(self):
-        self.output_dir = f'/users/students/r0667559/code/imitation-learning-codebase/cone_test_dir'
+        self.output_dir = f'/users/students/r0667559/code/imitation-learning-codebase/{get_filename_without_extension(__file__)}'
         print(self.output_dir)
         os.makedirs(self.output_dir, exist_ok=True)
         config = {
