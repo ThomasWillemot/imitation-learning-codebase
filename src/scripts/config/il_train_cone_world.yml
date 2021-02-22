@@ -1,5 +1,5 @@
 output_path: cone_world/sgd
-number_of_epochs: 60
+number_of_epochs: 150
 episode_runner_config:
   number_of_episodes: -1
 save_checkpoint_every_n: 10
