@@ -1,5 +1,5 @@
-output_path: /media/thomas/Elements/training_nn
-number_of_epochs: 60
+output_path: cone_world/sgd
+number_of_epochs: 1
 episode_runner_config:
   number_of_episodes: -1
 save_checkpoint_every_n: 10
@@ -14,21 +14,23 @@ architecture_config:
 trainer_config:
   optimizer: SGD
   weight_decay: 0.0001
-  learning_rate: 0.01
+  learning_rate: 0.001
   factory_key: BASE
   data_loader_config:
-    hdf5_files: [/media/thomas/Elements/data_collection_gazebo/train.hdf5]
+    hdf5_files:
+      - /users/students/r0667559/code/imitation-learning-codebase/experimental_data/data_collection_gazebo/training_0.hdf5
     random_seed: 123
     balance_over_actions: false
-    batch_size: 16
+    batch_size: 32
   criterion: MSELoss
   device: cuda
 evaluator_config:
   data_loader_config:
-    hdf5_files: [/media/thomas/Elements/data_collection_gazebo/validation.hdf5]
+    hdf5_files:
+      - /users/students/r0667559/code/imitation-learning-codebase/experimental_data/data_collection_gazebo/validation_0.hdf5
     random_seed: 123
     balance_over_actions: false
-    batch_size: 16
+    batch_size: 32
   criterion: MSELoss
   device: cpu
 tensorboard: true
