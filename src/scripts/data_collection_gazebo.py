@@ -93,9 +93,9 @@ class DataCollectionGazebo:
             roll = -1/18*np.pi + np.random.rand()/9*np.pi
             pitch = -1/18*np.pi + np.random.rand()/9*np.pi
             yaw = -1/18*np.pi + np.random.rand()/9*np.pi
-            random_x = -10 * np.random.rand() - 2
-            random_y = random_x * np.random.rand() - 0.5
-            random_z = random_x * np.random.rand() + 0.5
+            random_x = -8 * np.random.rand() - 2
+            random_y = -random_x/2 * np.random.rand() - 0.5
+            random_z = -random_x/2 * np.random.rand() + 0.5
             position = np.array([random_x, random_y, random_z, roll, pitch, yaw])
             #position = test_position[data_collect_amount]
             # make changes in gazebo
