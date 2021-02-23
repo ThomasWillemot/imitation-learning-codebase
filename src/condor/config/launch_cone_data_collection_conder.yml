@@ -3,10 +3,10 @@ mode: data_collection
 job_configs:
   - command: python3.8 src/scripts/data_collection_gazebo.py
     codebase_dir: /users/students/r0667559/code/imitation-learning-codebase
-    cpus: 11
+    cpus: 1
     gpus: 0
-    cpu_mem_gb: 16
-    disk_mem_gb: 32
+    cpu_mem_gb: 8
+    disk_mem_gb: 10
     wall_time_s: 40 * 60
     nice: true
     priority: -10
