@@ -53,7 +53,7 @@ class DataCollectionGazebo:
         config_dict = {
             'output_path': self.output_dir,
             'separate_raw_data_runs': False,
-            'store_hdf5': False
+            'store_hdf5': True
         }
         config_datasaver = DataSaverConfig().create(config_dict=config_dict)
         self._data_saver = DataSaver(config=config_datasaver)
@@ -143,7 +143,7 @@ class DataCollectionGazebo:
 
                 self._pause_client(EmptyRequest())
 
-        # self._data_saver.create_train_validation_hdf5_files()
+        self._data_saver.create_train_validation_hdf5_files()
 
     #Transforms the coordinates using the quaternions that describe the position of the drone
     def generate_annotation_cone_from_quat(self, position, quat):
