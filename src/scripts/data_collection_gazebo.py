@@ -53,10 +53,10 @@ class DataCollectionGazebo:
         config_dict = {
             'output_path': self.output_dir,
             'separate_raw_data_runs': False,
-            'store_hdf5': True
+            'store_hdf5': False
         }
-        config = DataSaverConfig().create(config_dict=config_dict)
-        self._data_saver = DataSaver(config=config)
+        config_datasaver = DataSaverConfig().create(config_dict=config_dict)
+        self._data_saver = DataSaver(config=config_datasaver)
         self._unpause_client = rospy.ServiceProxy('/gazebo/unpause_physics', Emptyservice)
         self._pause_client = rospy.ServiceProxy('/gazebo/pause_physics', Emptyservice)
         self._set_model_state = rospy.ServiceProxy('/gazebo/set_model_state', SetModelState)
@@ -143,8 +143,7 @@ class DataCollectionGazebo:
 
                 self._pause_client(EmptyRequest())
 
-        self._data_saver.create_train_validation_hdf5_files()
-        self.finish_collection()
+        # self._data_saver.create_train_validation_hdf5_files()
 
     #Transforms the coordinates using the quaternions that describe the position of the drone
     def generate_annotation_cone_from_quat(self, position, quat):
