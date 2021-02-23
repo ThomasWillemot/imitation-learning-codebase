@@ -18,7 +18,7 @@ trainer_config:
   factory_key: BASE
   data_loader_config:
     hdf5_files:
-      - /users/students/r0667559/code/imitation-learning-codebase/experimental_data/data_collection_gazebo/training_0.hdf5
+      - /users/students/r0667559/code/imitation-learning-codebase/experimental_data/data_collection_gazebo/train.hdf5
     random_seed: 123
     balance_over_actions: false
     batch_size: 32
@@ -27,7 +27,7 @@ trainer_config:
 evaluator_config:
   data_loader_config:
     hdf5_files:
-      - /users/students/r0667559/code/imitation-learning-codebase/experimental_data/data_collection_gazebo/validation_0.hdf5
+      - /users/students/r0667559/code/imitation-learning-codebase/experimental_data/data_collection_gazebo/validation.hdf5
     random_seed: 123
     balance_over_actions: false
     batch_size: 32
