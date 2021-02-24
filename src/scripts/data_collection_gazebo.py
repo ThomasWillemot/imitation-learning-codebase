@@ -25,7 +25,8 @@ from src.core.config_loader import Config, Parser
 class DataCollectionGazebo:
 
     def __init__(self):
-        self.output_dir = f'{get_data_dir(os.environ["DATADIR"])}/{get_filename_without_extension(__file__)}'
+        self.output_dir = f'/media/thomas/Elements/experimental_data/{get_filename_without_extension(__file__)}'
+        # self.output_dir = f'{get_data_dir(os.environ["DATADIR"])}/{get_filename_without_extension(__file__)}'
         print(self.output_dir)
         os.makedirs(self.output_dir, exist_ok=True)
         config = {
@@ -52,7 +53,7 @@ class DataCollectionGazebo:
         #config of the data saver
         config_dict = {
             'output_path': self.output_dir,
-            'separate_raw_data_runs': False,
+            'separate_raw_data_runs': True,
             'store_hdf5': True
         }
         config_datasaver = DataSaverConfig().create(config_dict=config_dict)
