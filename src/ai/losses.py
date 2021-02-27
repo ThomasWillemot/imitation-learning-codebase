@@ -133,6 +133,13 @@ class MMDLossSimple(Module):
             y = y.view(y.size(0), y.size(1) * y.size(2) * y.size(3))
         return ((x.mean(dim=0) - y.mean(dim=0))**2).sum().sqrt()
 
+class AbsError3D(Module):
+    def __init__(self, reduction):
+        super().__init__()
+
+    def forward(self, source, target):
+        print(str(source[0][1]) + 'source, '+ str(target[0][1])+ 'target')
+        return torch.abs(torch.sub(target, source))
 
 class MMDLossJordan(Module):
     """

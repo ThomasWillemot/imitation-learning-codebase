@@ -71,7 +71,13 @@ class Trainer(Evaluator):
         super().__init__(config, network, quiet=True)
 
         if not quiet:
-            self._optimizer = eval(f'torch.optim.{self._config.optimizer}')(params=self._net.parameters(),
+            if self._config.optimizer == 'Adam':
+                self._optimizer = eval(f'torch.optim.{self._config.optimizer}')(params=self._net.parameters(),
+                                                                                betas=(0.9, 0.999),
+                                                                                lr=self._config.learning_rate,
+                                                                                weight_decay=self._config.weight_decay)
+            else:
+                self._optimizer = eval(f'torch.optim.{self._config.optimizer}')(params=self._net.parameters(),
                                                                             lr=self._config.learning_rate,
                                                                             weight_decay=self._config.weight_decay)
 

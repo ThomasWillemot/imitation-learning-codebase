@@ -25,24 +25,25 @@ class Net(BaseNet):
         if not quiet:
             cprint(f'Started.', self._logger)
         self.input_size = (3, 800, 848)
-        self.output_size = (3,)
+        self.output_size = (4,)
         self.discrete = False
         self.dropout = nn.Dropout(p=config.dropout) if config.dropout != 'default' else None
         self.encoder = nn.Sequential(
-            nn.Conv2d(3, 8, 11, stride=2),
+            nn.Conv2d(3, 4, 5, stride=2),
             nn.ReLU(),
             nn.MaxPool2d(3,stride=3),
-            nn.Conv2d(8, 16, 7, stride=2),
+            nn.Conv2d(4, 8, 5, stride=2),
             nn.ReLU(),
             nn.MaxPool2d(3, stride=3),
-            nn.Conv2d(16, 32, 3, stride=2),
-            nn.ReLU()
+            nn.Conv2d(8, 16, 5, stride=2),
+            nn.ReLU(),
         )
-        self.decoder = mlp_creator(sizes=[3200, 512, 32, self.output_size[0]],
+        self.decoder = mlp_creator(sizes=[1296, 512, 128, self.output_size[0]],
                                    activation=nn.ReLU(),
                                    output_activation=nn.Identity(),
                                    bias_in_last_layer=False)
         self.initialize_architecture()
+
 
     def forward(self, inputs, train: bool = False) -> torch.Tensor:
         """
