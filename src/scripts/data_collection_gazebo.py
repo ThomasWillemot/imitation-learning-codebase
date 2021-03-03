@@ -26,8 +26,8 @@ from src.core.config_loader import Config, Parser
 class DataCollectionGazebo:
 
     def __init__(self):
-        #self.output_dir = f'/media/thomas/Elements/experimental_data/loc_and_is_cone/{get_filename_without_extension(__file__)}'
-        self.output_dir = f'{get_data_dir(os.environ["DATADIR"])}/norm_loc_and_is_cone/{get_filename_without_extension(__file__)}'
+        self.output_dir = f'/media/thomas/Elements/experimental_data/dept_est/{get_filename_without_extension(__file__)}'
+        # self.output_dir = f'{get_data_dir(os.environ["DATADIR"])}/single_location/{get_filename_without_extension(__file__)}'
         print(self.output_dir)
         os.makedirs(self.output_dir, exist_ok=True)
         config = {
@@ -74,7 +74,7 @@ class DataCollectionGazebo:
         pitch = position[4]
         yaw = position[5]
         model_state.pose.orientation.x, model_state.pose.orientation.y, model_state.pose.orientation.z, \
-        model_state.pose.orientation.w = quaternion_from_euler((roll, pitch, yaw))  # around x y z axis
+            model_state.pose.orientation.w = quaternion_from_euler((roll, pitch, yaw))  # around x y z axis
         self._set_model_state(model_state)
 
         # send command to change drone pos
@@ -89,26 +89,9 @@ class DataCollectionGazebo:
         print('waiting for first image')
         image0 = rospy.wait_for_message('/forward/camera/image', Image)  # test image
         prev_seq_nb = image0.header.seq
-        print('first received')
-        position_out = np.array([0.0, 0.0, 0.0])
-        cone_in_image = 0
         for data_collect_amount in range(total_data):
-            if np.random.rand() > 0.5:
-                cone_in_image = 1
-            else:
-                cone_in_image = 0
-            roll = -1 / 18 * np.pi + np.random.rand() / 9 * np.pi
-            pitch = -1 / 18 * np.pi + np.random.rand() / 9 * np.pi + np.pi / 6  # 30 degrees tilt downwards looking on av
-            yaw = -1 / 18 * np.pi + np.random.rand() / 9 * np.pi
-            random_x = -9 * np.random.rand() - 1  # between 1 and 5 meters
-            random_y = -random_x / 2 * np.random.rand() - 0.5
-            random_z = -random_x / 2 * np.random.rand() + 0.5
-            position = np.array([random_x, random_y, random_z, roll, pitch, yaw])
             # make changes in gazebo
-
-            # cone or no cone
-            if not cone_in_image:
-                position = np.array([-1*random_x, random_y, random_z, roll, pitch, yaw])
+            position = self.get_random_position()
             self._unpause_client(EmptyRequest())
             self.set_model_state(model_name, position)
             time.sleep(0.5)
@@ -124,10 +107,8 @@ class DataCollectionGazebo:
                 index_drone = position_gazebo.name.index(model_name)
                 pose_gazebo = position_gazebo.pose[index_drone].position
                 quat = position_gazebo.pose[index_drone].orientation
-                position_out[0] = pose_gazebo.x
-                position_out[1] = pose_gazebo.y
-                position_out[2] = pose_gazebo.z
-                cv_im = self.bridge.imgmsg_to_cv2(image, desired_encoding='passthrough')
+                position_out = np.array([pose_gazebo.x,pose_gazebo.y,pose_gazebo.z])
+                cv_im = self.bridge.imgmsg_to_cv2(image, desired_encoding='passthrough') #process image
                 image_np = np.asarray(cv_im)
                 # overcome saving double images, would generate a sequence of identical data
                 print(image.header.seq)
@@ -137,13 +118,9 @@ class DataCollectionGazebo:
                 experience.done = TerminationType.NotDone
                 if data_collect_amount == total_data:
                     experience.done = TerminationType.Done
-
-                ann_pos = self.generate_annotation_cone_from_quat(position_out, quat)
-                experience.action = np.array([ann_pos[0],ann_pos[1],ann_pos[2],1])
-                if not cone_in_image:
-                    experience.action = np.array([0,0,0,0])
+                experience.action = self.generate_annotation_cone_from_quat(position_out, quat)
                 experience.time_stamp = data_collect_amount
-                experience.info = {"x": position[0], "y": position[1], "z": position[2], "yaw": position[5]}
+                experience.info = {"x": position[0]}
                 while image is None:
                     time.sleep(0.01)
                 experience.observation = image_np
@@ -160,7 +137,7 @@ class DataCollectionGazebo:
         coordin_in = np.array([position[0], position[1], position[2]])
         r = R.from_quat(quat_np)
         matrix_r = r.as_matrix()
-        coordin_out = -1 * coordin_in.dot(matrix_r)/10
+        coordin_out = -1 * coordin_in.dot(matrix_r)
         return coordin_out
 
     def generate_2d_annotations(self, annotations):
@@ -168,6 +145,16 @@ class DataCollectionGazebo:
 
     def finish_collection(self):
         self.ros_process.terminate()
+
+    def get_random_position(self):
+        roll = -1 / 18 * np.pi + np.random.rand() / 9 * np.pi
+        pitch = -1 / 18 * np.pi + np.random.rand() / 9 * np.pi + np.pi / 6  # 30 degrees tilt downwards looking on av
+        yaw = -1 / 18 * np.pi + np.random.rand() / 9 * np.pi
+        random_x = -5 * np.random.rand() - 2  # between 1 and 5 meters
+        random_y = -random_x / 2 * np.random.rand() - 0.5
+        random_z = -random_x / 2 * np.random.rand() + 0.5
+        position = np.array([random_x, random_y, random_z, roll, pitch, yaw])
+        return position
 
 
 if __name__ == "__main__":
@@ -181,6 +168,6 @@ if __name__ == "__main__":
         shutil.rmtree(configuration['output_path'], ignore_errors=True)
 
     data_col = DataCollectionGazebo()
-    amount_of_images = 1000
+    amount_of_images = 50
     data_col.generate_image(amount_of_images)
     data_col.finish_collection()
