@@ -1,5 +1,5 @@
 output_path: /media/thomas/Elements/training_nn/50_ep_no_pool
-number_of_epochs: 50
+number_of_epochs: 100
 episode_runner_config:
   number_of_episodes: -1
 save_checkpoint_every_n: 10
@@ -13,24 +13,25 @@ architecture_config:
   log_std: default
 trainer_config:
   optimizer: Adam
-  learning_rate: 0.01
+  learning_rate: 0.001
+  weight_decay: 0.0001
   factory_key: BASE
   gradient_clip_norm: -1
   data_loader_config:
     hdf5_files:
-      - /media/thomas/Elements/experimental_data/loc_and_is_cone/data_collection_gazebo/train.hdf5
+      - /media/thomas/Elements/experimental_data/dept_est/data_collection_gazebo/train.hdf5
     random_seed: 123
     balance_over_actions: false
     batch_size: 1
   criterion: MSELoss
-  device: cpu
+  device: cuda
 evaluator_config:
   data_loader_config:
     hdf5_files:
-      - /media/thomas/Elements/experimental_data/loc_and_is_cone/data_collection_gazebo/validation.hdf5
+      - /media/thomas/Elements/experimental_data/dept_est/data_collection_gazebo/validation.hdf5
     random_seed: 123
     balance_over_actions: false
     batch_size: 1
-  criterion: MSELoss
-  device: cpu
+  criterion: AbsErrorX
+  device: cuda
 tensorboard: true

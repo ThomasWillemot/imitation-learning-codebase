@@ -25,7 +25,7 @@ class Net(BaseNet):
         if not quiet:
             cprint(f'Started.', self._logger)
         self.input_size = (3, 800, 848)
-        self.output_size = (4,)
+        self.output_size = (3,)
         self.discrete = False
         self.dropout = nn.Dropout(p=config.dropout) if config.dropout != 'default' else None
         self.encoder = nn.Sequential(
