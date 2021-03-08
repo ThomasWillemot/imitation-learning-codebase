@@ -220,6 +220,6 @@ if __name__ == "__main__":
         shutil.rmtree(configuration['output_path'], ignore_errors=True)
 
     data_col = DataCollectionGazebo()
-    amount_of_images = 20
+    amount_of_images = 500
     data_col.generate_image(amount_of_images,False)
     data_col.finish_collection()
