@@ -3,11 +3,11 @@ mode: data_collection
 job_configs:
   - command: python3.8 src/scripts/data_collection_gazebo.py
     codebase_dir: /users/students/r0667559/code/imitation-learning-codebase
-    cpus: 11
+    cpus: 8
     gpus: 0
-    cpu_mem_gb: 16
-    disk_mem_gb: 20
-    wall_time_s: 60 * 60
+    cpu_mem_gb: 8
+    disk_mem_gb: 2
+    wall_time_s: 10 * 60
     nice: true
     priority: -10
     use_singularity: true
@@ -17,6 +17,6 @@ job_configs:
     singularity_file: image-0.1.7.sif
     extra_requirements: ( Mips >= 26000 )
 number_of_jobs:
-  - 5
+  - 2
 base_config_files:
   - src/scripts/config/il_data_collection_cone_world.yml
