@@ -1,4 +1,4 @@
 world_name: cone_world
-max_duration: 60*10
+max_duration: 60*30
 delay_evaluation: 1
 waypoint_reached_distance: 4

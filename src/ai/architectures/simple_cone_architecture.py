@@ -29,16 +29,16 @@ class Net(BaseNet):
         self.discrete = False
         self.dropout = nn.Dropout(p=config.dropout) if config.dropout != 'default' else None
         self.encoder = nn.Sequential(
-            nn.Conv2d(3, 4, 5, stride=2),
+            nn.Conv2d(3, 8, 3, stride=2),
             nn.ReLU(),
-            nn.MaxPool2d(3,stride=3),
-            nn.Conv2d(4, 8, 5, stride=2),
+            nn.MaxPool2d(2,stride=2),
+            nn.Conv2d(8, 12, 3, stride=2),
             nn.ReLU(),
-            nn.MaxPool2d(3, stride=3),
-            nn.Conv2d(8, 16, 5, stride=2),
+            nn.MaxPool2d(2, stride=2),
+            nn.Conv2d(12, 16, 5, stride=2),
             nn.ReLU(),
         )
-        self.decoder = mlp_creator(sizes=[1296, 512, 128, self.output_size[0]],
+        self.decoder = mlp_creator(sizes=[8832, 2048, 256, self.output_size[0]],
                                    activation=nn.ReLU(),
                                    output_activation=nn.Identity(),
                                    bias_in_last_layer=False)

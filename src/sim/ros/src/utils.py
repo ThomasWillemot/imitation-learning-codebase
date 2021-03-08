@@ -231,6 +231,8 @@ def euler_from_quaternion(quaternion: tuple) -> tuple:
 def quaternion_from_euler(euler: tuple) -> tuple:
     return tuple(R.from_euler('XYZ', euler, degrees=False).as_quat())
 
+def quaternion_from_euler_ZYX(euler: tuple) -> tuple:
+    return tuple(R.from_euler('ZYX', euler, degrees=False).as_quat())
 
 def rotation_from_quaternion(quaternion: tuple) -> np.ndarray:
     return np.asarray(R.from_quat(quaternion).as_matrix())
