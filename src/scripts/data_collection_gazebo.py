@@ -221,5 +221,5 @@ if __name__ == "__main__":
 
     data_col = DataCollectionGazebo()
     amount_of_images = 500
-    data_col.generate_image(amount_of_images,False)
+    data_col.generate_image(amount_of_images,True)
     data_col.finish_collection()
