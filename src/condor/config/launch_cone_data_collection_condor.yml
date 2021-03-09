@@ -12,7 +12,7 @@ job_configs:
     priority: -10
     use_singularity: true
     check_if_ros_already_in_use: false
-    save_locally: true
+    save_locally: false
     singularity_dir: /esat/opal/kkelchte/singularity_images/ubuntu
     singularity_file: image-0.1.7.sif
     extra_requirements: ( Mips >= 26000 )
