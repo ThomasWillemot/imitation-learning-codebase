@@ -3,16 +3,16 @@ mode: data_collection
 job_configs:
   - command: python3.8 src/scripts/data_collection_gazebo.py
     codebase_dir: /users/students/r0667559/code/imitation-learning-codebase
-    cpus: 8
+    cpus: 11
     gpus: 0
     cpu_mem_gb: 32
     disk_mem_gb: 32
-    wall_time_s: 60 * 60
+    wall_time_s: 2 * 60 * 60
     nice: true
     priority: -10
     use_singularity: true
     check_if_ros_already_in_use: false
-    save_locally: false
+    save_locally: true
     singularity_dir: /esat/opal/kkelchte/singularity_images/ubuntu
     singularity_file: image-0.1.7.sif
     extra_requirements: ( Mips >= 26000 )
