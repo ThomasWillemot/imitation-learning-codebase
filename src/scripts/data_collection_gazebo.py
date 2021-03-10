@@ -28,7 +28,8 @@ class DataCollectionGazebo:
 
     def __init__(self):
         # self.output_dir = f'/media/thomas/Elements/experimental_data/dept_est/{get_filename_without_extension(__file__)}'
-        self.output_dir = f'{get_data_dir(os.environ["DATADIR"])}/cone_data/{get_filename_without_extension(__file__)}'
+        self.output_dir= f'/esat/opal/r0667559/data'
+        # self.output_dir = f'{get_data_dir(os.environ["DATADIR"])}/cone_data/{get_filename_without_extension(__file__)}'
         print(self.output_dir)
         os.makedirs(self.output_dir, exist_ok=True)
         config = {
