@@ -63,6 +63,7 @@ class DataCollectionGazebo:
         config_datasaver = DataSaverConfig().create(config_dict=config_dict)
         self._data_saver = DataSaver(config=config_datasaver)
         # Create proxy for needed services.
+        print('create proxys')
         rospy.wait_for_service('/gazebo/unpause_physics')
         self._unpause_client = rospy.ServiceProxy('/gazebo/unpause_physics', Emptyservice)
         rospy.wait_for_service('/gazebo/pause_physics')
@@ -73,6 +74,7 @@ class DataCollectionGazebo:
         self._spawn_model_prox = rospy.ServiceProxy('gazebo/spawn_sdf_model', SpawnModel)
         rospy.wait_for_service('gazebo/delete_model')
         self._delete_model = rospy.ServiceProxy('gazebo/delete_model', DeleteModel)
+        print('proxys initialised')
 
     # Collection of data in simulation environment gazebo.
     # Data is saved as experiments and written to the output folder.
@@ -221,6 +223,6 @@ if __name__ == "__main__":
         shutil.rmtree(configuration['output_path'], ignore_errors=True)
 
     data_col = DataCollectionGazebo()
-    amount_of_images = 500
-    data_col.generate_image(amount_of_images,True)
+    amount_of_images = 50
+    data_col.generate_image(amount_of_images,False)
     data_col.finish_collection()

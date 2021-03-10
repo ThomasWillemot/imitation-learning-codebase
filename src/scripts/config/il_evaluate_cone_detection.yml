@@ -14,6 +14,7 @@ evaluator_config:
     balance_over_actions: false
     batch_size: 1
     input_size: [3, 800, 848]
+  store_projected_output_on_tensorboard: True
   criterion: AbsErrorX
   device: cuda
 tensorboard: true

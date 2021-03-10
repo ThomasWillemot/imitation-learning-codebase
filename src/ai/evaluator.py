@@ -34,7 +34,7 @@ class EvaluatorConfig(Config):
     evaluate_extensive: bool = False
     store_output_on_tensorboard: bool = False
     store_feature_maps_on_tensorboard: bool = False
-
+    store_projected_output_on_tensorboard: bool = False
 
 class Evaluator:
 
@@ -86,6 +86,8 @@ class Evaluator:
                 writer.write_output_image(predictions, f'{tag}/predictions')
                 writer.write_output_image(targets, f'{tag}/targets')
                 writer.write_output_image(torch.stack(batch.observations), f'{tag}/inputs')
+            if self._config.store_projected_output_on_tensorboard:
+                writer.write_output_image(batch.observations[0], f'{tag}/projected_cone')
 
         msg = f' {tag} {self._config.criterion} {error_distribution.mean: 0.3e} [{error_distribution.std:0.2e}]'
 
