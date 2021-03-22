@@ -1,20 +1,20 @@
-output_path: cone_evaluate
+output_path: /media/thomas/Elements/training_nn/eval_big_data
 number_of_epochs: 1
 episode_runner_config:
   number_of_episodes: 1
 architecture_config:
   architecture: simple_cone_architecture
   device: cpu
-load_checkpoint_dir: /media/thomas/Elements/training_nn/50_ep_no_pool
+load_checkpoint_dir: /media/thomas/Elements/training_nn/big_data_set_single_cone
 evaluator_config:
   data_loader_config:
-    data_directories:
-      -  /media/thomas/Elements/experimental_data/dept_est/data_collection_gazebo/raw_data/21-03-06_16-51-06
+    hdf5_files:
+      -  /media/thomas/Elements/experimental_data/single_cone_aug/data_collection_gazebo/validation.hdf5
     random_seed: 123
     balance_over_actions: false
     batch_size: 1
-    input_size: [3, 800, 848]
-  store_projected_output_on_tensorboard: True
+    input_size: [1, 800, 848]
+  store_projected_output_on_tensorboard: true
   criterion: AbsErrorX
   device: cuda
 tensorboard: true

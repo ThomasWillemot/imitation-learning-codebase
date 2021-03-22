@@ -2,6 +2,8 @@
 from typing import Tuple, Optional
 
 from dataclasses import dataclass
+
+import cv2
 import torch
 from torch.nn import *
 import numpy as np
@@ -70,6 +72,7 @@ class Evaluator:
     def evaluate(self, epoch: int = -1, writer=None, tag: str = 'validation') -> Tuple[str, bool]:
         self.put_model_on_device()
         total_error = []
+        cntr = 0
 #        for batch in tqdm(self.data_loader.get_data_batch(), ascii=True, desc='evaluate'):
         for batch in self.data_loader.get_data_batch():
             with torch.no_grad():
@@ -78,6 +81,21 @@ class Evaluator:
                 error = self._criterion(predictions,
                                         targets).mean()
                 total_error.append(error)
+                if self._config.store_projected_output_on_tensorboard:
+                    numpy_obs = batch.observations[0].numpy()
+                    zeros = np.zeros((1, 800, 848))
+                    np_pred = predictions.cpu().numpy()
+                    x_position = int(-np_pred[0][1] / np_pred[0][0] * 505.3 + 424.5)
+                    y_position = int(-np_pred[0][2] / np_pred[0][0] * 505.3 + 400.5)
+                    if 0<x_position<848 and 0<y_position<800:
+                        cone_circle_cv = cv2.circle(numpy_obs[0, :, :], (x_position, y_position), int(3.65*np_pred[0][0]), 1, 5)
+                        cone_circle_image_np = np.asarray(cone_circle_cv)
+                    else:
+                        cone_circle_image_np = np.asarray(numpy_obs[0, :, :])
+                    zeros[0, :, :] = cone_circle_image_np
+                    image_tensor = torch.from_numpy(zeros)
+                    writer.write_output_image(image_tensor, f'{tag}/projected_cone/{cntr}')
+                    cntr +=1
         error_distribution = Distribution(total_error)
         self.put_model_back_to_original_device()
         if writer is not None:
@@ -86,8 +104,6 @@ class Evaluator:
                 writer.write_output_image(predictions, f'{tag}/predictions')
                 writer.write_output_image(targets, f'{tag}/targets')
                 writer.write_output_image(torch.stack(batch.observations), f'{tag}/inputs')
-            if self._config.store_projected_output_on_tensorboard:
-                writer.write_output_image(batch.observations[0], f'{tag}/projected_cone')
 
         msg = f' {tag} {self._config.criterion} {error_distribution.mean: 0.3e} [{error_distribution.std:0.2e}]'
 

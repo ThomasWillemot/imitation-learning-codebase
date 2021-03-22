@@ -89,7 +89,9 @@ def load_and_preprocess_file(file_name: str, size: tuple = None, scope: str = 'd
         assert np.amax(data) <= 1 and np.amin(data) >= 0
     elif scope == "zero_centered":
         assert 0 <= np.amax(data) <= 1 and -1 <= np.amin(data) < 0
-
+    # check if 3 layers (rgb) or 1 (grayscale)
+    if len(data.shape) == 2:
+        data = data[..., np.newaxis]
     data = data.swapaxes(1, 2).swapaxes(0, 1)  # make channel first
     return torch.as_tensor(data, dtype=torch.float32)
 

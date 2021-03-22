@@ -49,22 +49,34 @@ class WaypointExtractor:
 
     # Extract the 2d location in the image after segmentation.
     # TODO: loops of get_cone_binary and this function can be written in one.
+    # Extract the 2d location in the image after segmentation.
+    # Input: binary/thersholed image
+    # output: x(width in image), y(height in image), width of cone (in pixels)
     def get_cone_2d_location(self, bin_im):
-        row_sum = np.sum(bin_im, axis=0)
+        row_sum = np.sum(bin_im, axis=1)
         i = 0
-        while row_sum[i] > 1 and i < 847:
-            bin_im[i, :] = np.zeros(800)
+
+        while row_sum[i] > 1 and i < 799:
+            bin_im[i, :] = np.zeros(848)
             i += 1
-        row_sum = np.sum(bin_im, axis=0)
+
+        airrow = 0
+        for row_idx in range(799):
+            if row_sum[row_idx] > 400 * 255:
+                airrow = row_idx
+        bin_im[1:airrow, :] = 0
+        row_sum = np.sum(bin_im, axis=1)
         cone_found = False
         cone_row = 0
         max_row = 0
-        row = 847  # start where no drone parts are visible in image
+        row = 799  # start where no drone parts are visible in image
+        cone_started = False
         while not cone_found and row >= 0:
-            if row_sum[row] >= max_row:
+            if row_sum[row] >= max_row and row_sum[row] > 4 * 255:
                 cone_row = row
                 max_row = row_sum[row]
-            else:
+                cone_started = True
+            elif cone_started:
                 cone_found = True
             row -= 1
 
@@ -72,7 +84,7 @@ class WaypointExtractor:
         max_start = 0
         max_width = 0
         current_width = 0
-        for col_index in range(799):
+        for col_index in range(847):
             if bin_im[cone_row, col_index] == 0:
                 if current_width > max_width:
                     max_width = current_width
@@ -83,164 +95,7 @@ class WaypointExtractor:
                 if current_start == 0:
                     current_start = col_index
                 current_width += 1
-
-        return [max_start + int(np.ceil(max_width / 2)) - 400, -cone_row + 424, max_width]
-
-    def get_cone_2d_location_sum(self, bin_im):
-        row_sum = np.sum(bin_im, axis=1)
-        i = 0
-        while row_sum[i] > 1:
-            bin_im[i, :] = np.zeros(800)
-            i += 1
-        row_sum = np.sum(bin_im, axis=1)
-        cone_found = False
-        cone_row = 0
-        max_row = 0
-        row = 847
-        while not cone_found:
-            if row_sum[row] >= max_row:
-                cone_row = row
-                max_row = row_sum[row]
-            else:
-                cone_found = True
-            row -= 1
-
-        current_start = 0
-        max_start = 0
-        max_width = 0
-        current_width = 0
-        for col_index in range(799):
-            if bin_im[cone_row,col_index] == 0:
-                if current_width > max_width:
-                    max_width = current_width
-                    max_start = current_start
-                current_width = 0
-                current_start = 0
-            else:
-                if current_start == 0:
-                    current_start = col_index
-                current_width += 1
-
-
-        return [max_start+int(np.ceil(max_width/2)) - 400, -cone_row + 424, max_width]
-
-
-    def get_cone_2d_speedup(self, bin_im, prev_coor):
-        if prev_coor[2] == 0:
-            return self.get_cone_2d_strided(bin_im)
-        x_prev_pix = prev_coor[0] + 400
-        y_prev_pix = -prev_coor[1] + 424
-        if prev_coor[1] > 846 or prev_coor[0] <2 or prev_coor[1] <2 or prev_coor[0] >= 799:
-            return self.get_cone_2d_strided(bin_im)
-        return self.search_diag(bin_im, x_prev_pix, y_prev_pix)
-
-    def search_left_up(self, bin_im, x_prev_pix, y_prev_pix):
-        if y_prev_pix == 847 or x_prev_pix == 0 or y_prev_pix == 0 or x_prev_pix == 799:
-            return [x_prev_pix, y_prev_pix]
-        if bin_im[y_prev_pix + 1, x_prev_pix - 1] > 0:  # left
-            return self.search_left_down(bin_im, x_prev_pix - 1, y_prev_pix + 1)
-        elif bin_im[y_prev_pix - 1, x_prev_pix - 1] > 0:  # down
-            return self.search_left_up(bin_im, x_prev_pix - 1, y_prev_pix - 1)
-        else:
-            return [x_prev_pix, y_prev_pix]
-
-    def search_right_up(self, bin_im, x_prev_pix, y_prev_pix):
-        if y_prev_pix == 847 or x_prev_pix == 0 or y_prev_pix == 0 or x_prev_pix == 799:
-            return [x_prev_pix, y_prev_pix]
-        if bin_im[y_prev_pix + 1, x_prev_pix + 1] > 0:  # left
-            return self.search_right_down(bin_im, x_prev_pix + 1, y_prev_pix + 1)
-        elif bin_im[y_prev_pix - 1, x_prev_pix + 1] > 0:  # up
-            return self.search_right_up(bin_im, x_prev_pix + 1, y_prev_pix - 1)
-        else:
-            return [x_prev_pix, y_prev_pix]
-
-    def search_left_down(self, bin_im, x_prev_pix, y_prev_pix):
-        if y_prev_pix == 847 or x_prev_pix == 0 or y_prev_pix == 0 or x_prev_pix == 799:
-            return [x_prev_pix, y_prev_pix]
-        if bin_im[y_prev_pix - 1, x_prev_pix - 1] > 0:  # right
-            return self.search_left_up(bin_im, x_prev_pix - 1, y_prev_pix - 1)
-        elif bin_im[y_prev_pix + 1, x_prev_pix - 1] > 0:  # down
-            return self.search_left_down(bin_im, x_prev_pix - 1, y_prev_pix + 1)
-        else:
-            return [x_prev_pix, y_prev_pix]
-
-    def search_right_down(self, bin_im, x_prev_pix, y_prev_pix):
-        if y_prev_pix == 847 or x_prev_pix == 0 or y_prev_pix == 0 or x_prev_pix == 799:
-            return [x_prev_pix, y_prev_pix]
-        if bin_im[y_prev_pix - 1, x_prev_pix + 1] > 0:  # right
-            return self.search_right_up(bin_im, x_prev_pix + 1, y_prev_pix - 1)
-        elif bin_im[y_prev_pix + 1, x_prev_pix + 1] > 0:  # up
-            return self.search_right_down(bin_im, x_prev_pix + 1, y_prev_pix + 1)
-        else:
-            return [x_prev_pix, y_prev_pix]
-
-    def search_diag(self, bin_im, prev_pix_x, prev_pix_y):
-        # up left
-        left_coor = [0, 0]
-        right_coor = [0, 0]
-        up_coor = [0, 0]
-        down_coor = [0, 0]
-        if bin_im[prev_pix_y - 1, prev_pix_x - 1]:
-            up_coor = self.search_left_up(bin_im, prev_pix_x - 1, prev_pix_y - 1)
-        # right up
-        if bin_im[prev_pix_y - 1, prev_pix_x + 1]:
-            right_coor = self.search_right_up(bin_im, prev_pix_x + 1, prev_pix_y - 1)
-        # left down
-        if bin_im[prev_pix_y + 1, prev_pix_x - 1]:
-            left_coor = self.search_right_down(bin_im, prev_pix_x - 1, prev_pix_y + 1)
-        # down right
-        if bin_im[prev_pix_y + 1, prev_pix_x + 1]:
-            down_coor = self.search_right_down(bin_im, prev_pix_x + 1, prev_pix_y + 1)
-        left_side_obj = min(left_coor[0], up_coor[0])
-        top_side_obj = min(left_coor[1], up_coor[1])
-        right_side_obj = max(down_coor[0], right_coor[0])
-        down_side_obj = max(down_coor[1], right_coor[1])
-
-        if left_side_obj == right_side_obj:
-            return self.get_cone_2d_strided(bin_im)
-        else:
-            return [int(np.ceil((left_side_obj + right_side_obj) / 2) - 400),
-                    int(-1 * (np.ceil(top_side_obj + down_side_obj) / 2) + 424),
-                    right_side_obj - left_side_obj]
-
-    def get_cone_2d_strided(self, bin_im):
-        cone_found = False
-        im_size = bin_im.shape
-        max_width_row = 0
-        max_width_x = -1
-        max_width_y = -1
-        current_width_start = -1
-        current_width = 0
-        prev_pix = 0
-        row = im_size[0] - 1
-        prev_row = 0
-        while not cone_found and row >= 0:
-            for column in range(int(im_size[1] / 2)):
-                if bin_im[row, column * 2] > 0:
-                    if current_width_start == -1:
-                        current_width_start = column * 2
-                    elif prev_pix == 1:
-                        current_width += 1
-                    elif current_width == 0:
-                        current_width_start = column * 2
-                    prev_pix = 1
-                else:
-                    prev_pix = 0
-            if current_width > max_width_row and current_width_start > 0:
-                max_width_row = current_width
-                max_width_x = current_width_start
-                max_width_y = row
-            if prev_row == 1 and current_width_start == -1 and max_width_row > 10:
-                cone_found = True
-            if current_width_start > -1:
-                prev_row = 1
-            current_width = 0
-            current_width_start = -1
-            row -= 2
-        max_width_row = max_width_row * 2
-
-        return [max_width_x - 400 + int(np.ceil(max_width_row / 2)), -max_width_y + 424,
-                max_width_row]  # counting starts at zero
+        return [max_start + int(np.ceil(max_width / 2)) - 424, -cone_row + 400, max_width]
 
     # 3d coordinate estimation using
     def get_cone_3d_location(self, cone_width_px, cone_width_m, conetop_coor, tune_factor):
