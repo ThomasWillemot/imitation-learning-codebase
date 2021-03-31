@@ -54,6 +54,7 @@ class TrainerConfig(EvaluatorConfig):
     add_KL_divergence_loss: bool = False
     target_data_loader_config: DataLoaderConfig = None
     domain_adaptation_criterion: str = "default"
+    split_losses: bool = False
 
     def __post_init__(self):
         # add options in post_init so they are easy to find
@@ -92,6 +93,9 @@ class Trainer(Evaluator):
     def train(self, epoch: int = -1, writer=None) -> str:
         self.put_model_on_device()
         total_error = []
+        if self._config.split_losses:
+            total_error_1 = []
+            total_error_2 = []
         #        for batch in tqdm(self.data_loader.sample_shuffled_batch(), ascii=True, desc='train'):
         for batch in self.data_loader.sample_shuffled_batch():
             self._optimizer.zero_grad()
@@ -101,6 +105,11 @@ class Trainer(Evaluator):
             else:
                 predictions = self._net.forward(batch.observations, train=True)
 
+            if self._config.split_losses:
+                temp_loss = self._criterion(predictions, targets)
+                loss_1, loss_2 = torch.chunk(temp_loss, 2, dim=1)
+                loss_1 = loss_1.mean()
+                loss_2 = loss_2.mean()
             loss = self._criterion(predictions, targets).mean()
             if self._config.add_KL_divergence_loss:
                 # https://arxiv.org/pdf/1312.6114.pdf
@@ -113,23 +122,38 @@ class Trainer(Evaluator):
                                          self._config.gradient_clip_norm)
             self._optimizer.step()
             self._net.global_step += 1
+            if self._config.split_losses:
+                total_error_1.append(loss_1.cpu().detach())
+                total_error_2.append(loss_2.cpu().detach())
             total_error.append(loss.cpu().detach())
+
         self.put_model_back_to_original_device()
 
         if self._scheduler is not None:
             self._scheduler.step()
 
         error_distribution = Distribution(total_error)
+        if self._config.split_losses:
+            error_distribution_1 = Distribution(total_error_1)
+            error_distribution_2 = Distribution(total_error_2)
         if writer is not None:
             writer.set_step(self._net.global_step)
             writer.write_distribution(error_distribution, 'training')
+            if self._config.split_losses:
+                writer.write_distribution(error_distribution_1, 'training_cone_1')
+                writer.write_distribution(error_distribution_2, 'training_cone_2')
             if self._config.add_KL_divergence_loss:
                 writer.write_scalar(KL_loss, 'KL_divergence')
             if self._config.store_output_on_tensorboard and epoch % 30 == 0:
                 writer.write_output_image(predictions, 'training/predictions')
                 writer.write_output_image(targets, 'training/targets')
                 writer.write_output_image(torch.stack(batch.observations), 'training/inputs')
-        return f' training {self._config.criterion} {error_distribution.mean: 0.3e} [{error_distribution.std:0.2e}]'
+        if self._config.split_losses:
+            out = f' training cone 1 {self._config.criterion} {error_distribution_1.mean: 0.3e} [{error_distribution_1.std:0.2e}] \n ' \
+                  f' training cone 2 {self._config.criterion} {error_distribution_2.mean: 0.3e} [{error_distribution_2.std:0.2e}]'
+        else:
+            out = f' training {self._config.criterion} {error_distribution.mean: 0.3e} [{error_distribution.std:0.2e}]'
+        return out
 
     def get_checkpoint(self) -> dict:
         """
