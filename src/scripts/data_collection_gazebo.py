@@ -22,16 +22,17 @@ from scipy.spatial.transform import Rotation as R
 from src.data.data_saver import DataSaver, DataSaverConfig
 from src.core.config_loader import Config, Parser
 
-#TODO THE CONE IS ON THE GROUND NOW
+
+# TODO THE CONE IS ON THE GROUND NOW
 
 # Class for data collection in a gazebo world.
 class DataCollectionGazebo:
 
     def __init__(self, run_local=True):
         if run_local:
-            self.output_dir = f'/media/thomas/Elements/experimental_data/multiple_cones/{get_filename_without_extension(__file__)}'
+            self.output_dir = f'/media/thomas/Elements/experimental_data/test_brol/{get_filename_without_extension(__file__)}'
         else:
-            self.output_dir= f'/esat/opal/r0667559/data'
+            self.output_dir = f'/esat/opal/r0667559/data'
             # self.output_dir = f'{get_data_dir(os.environ["DATADIR"])}/cone_data/{get_filename_without_extension(__file__)}'
         print(self.output_dir)
         os.makedirs(self.output_dir, exist_ok=True)
@@ -84,15 +85,15 @@ class DataCollectionGazebo:
     # Collection of data in simulation environment gazebo.
     # Data is saved as experiments and written to the output folder.
     # Input: amount of images to produce.
-    def generate_image(self, total_data,create_hdf5=False, augmented=True, grayscale=False, max_cones = 1):
+    def generate_image(self, total_data, create_hdf5=False, augmented=True, grayscale=False, max_cones=1, output_cones=1):
         model_name = rospy.get_param('/robot/model_name')
         cone_name = 'Cone'
         self._set_model_state.wait_for_service()
         print('waiting for first image')
         image0 = rospy.wait_for_message('/forward/camera/image', Image)  # test image
         prev_seq_nb = image0.header.seq
-        #TODO get image parameters, rectify images then: seems to be ok already? rectify makes it worse
-        if max_cones>1:
+        # TODO get image parameters, rectify images then: seems to be ok already? rectify makes it worse
+        if max_cones > 0:
             self.spawn_cone(max_cones)
         if not augmented:
             self._delete_model('Boxed_flyzone')
@@ -104,7 +105,10 @@ class DataCollectionGazebo:
             # make changes in gazebo
             position_camera = self.get_random_circle_position()
             self._unpause_client(EmptyRequest())
-            self.update_cone_locations(position_camera)
+            if max_cones > 1:
+                self.update_cone_locations(position_camera, visible=False)
+            elif max_cones == 1:
+                self.update_cone_locations(position_camera, visible=True)
             self.set_model_state(model_name, position_camera)
             time.sleep(0.5)
             # Collection of annotated data.
@@ -131,7 +135,12 @@ class DataCollectionGazebo:
                 experience.done = TerminationType.NotDone
                 if data_collect_amount == total_data:
                     experience.done = TerminationType.Done
-                experience.action = self.generate_annotation_cone_from_quat(position_out, position_cone, quat)
+                if output_cones == 1:
+                    experience.action = self.generate_annotation_cone_from_quat(position_out, position_cone, quat)
+                elif output_cones == 2:
+                    cone_1_outputs = self.generate_annotation_cone_from_quat(position_out, position_cone, quat)
+                    cone_2_outputs = self.generate_annotation_cone_from_quat(position_out, self.cone_dict["cone_0"], quat)
+                    experience.action = np.concatenate([cone_1_outputs, cone_2_outputs])
                 experience.time_stamp = data_collect_amount
                 experience.info = {"x": position_camera[0]}
                 while image is None:
@@ -148,7 +157,8 @@ class DataCollectionGazebo:
     # Transforms the coordinates using the quaternions that describe the position of the drone
     def generate_annotation_cone_from_quat(self, position_drone, position_cone, quat):
         quat_np = np.array([quat.x, quat.y, quat.z, quat.w])  # needs x,y,z,w format
-        coordin_in = np.array([position_drone[0]-position_cone[0], position_drone[1]-position_cone[1], position_drone[2]-position_cone[2]])
+        coordin_in = np.array([position_drone[0] - position_cone[0], position_drone[1] - position_cone[1],
+                               position_drone[2] - position_cone[2]])
         r = R.from_quat(quat_np)
         matrix_r = r.as_matrix()
         coordin_out = -1 * coordin_in.dot(matrix_r)
@@ -158,15 +168,9 @@ class DataCollectionGazebo:
     def post_process_image(self, image, binary=False):
         cv_im = self.bridge.imgmsg_to_cv2(image, desired_encoding='passthrough')  # process image
         if binary:
-            #cv_im = cv2.cvtColor(cv_im, cv2.COLOR_RGB2GRAY)
+            # cv_im = cv2.cvtColor(cv_im, cv2.COLOR_RGB2GRAY)
             th, binary_image = cv2.threshold(cv_im, 180, 255, cv2.ADAPTIVE_THRESH_MEAN_C)
-            decision_random = np.random.rand()
-            if decision_random > 0.66:
-                mask_path = '/media/thomas/Elements/Thesis_temp_data/masks/mask_01.png'
-            elif decision_random < 0.33:
-                mask_path = '/media/thomas/Elements/Thesis_temp_data/masks/mask_02.png'
-            else:
-                mask_path = '/media/thomas/Elements/Thesis_temp_data/masks/mask_03.png'
+            mask_path = '/media/thomas/Elements/Thesis/frame_drone_mask.png'
             mask = cv2.imread(mask_path, 0)
             row_sum = np.sum(binary_image, axis=1)  # should be 800 high
             i = 0
@@ -175,25 +179,26 @@ class DataCollectionGazebo:
                 i += 1
             airrow = 0
             for row_idx in range(799):
-                if row_sum[row_idx] > 400*255:
+                if row_sum[row_idx] > 400 * 255:
                     airrow = row_idx
                 if row_sum[row_idx] == 1:
                     binary_image[row_idx, :] = 0
             binary_image[1:airrow, :] = 0
-            img_masked = cv2.bitwise_or(binary_image, mask)
+            img_masked = cv2.bitwise_and(binary_image, mask)
             image_np_gray = np.asarray(img_masked)
             image_np = image_np_gray
         else:
             image_np = np.asarray(cv_im)
         return image_np
+
     def finish_collection(self):
         self.ros_process.terminate()
 
     # Samples random camera position facing to the (0,0,0) coordinate.
     def get_random_position(self):
-        roll = -np.pi/6 -1 / 18 * np.pi + np.random.rand() / 9 * np.pi
-        pitch = 0 -1 / 18 * np.pi + np.random.rand() / 9 * np.pi   # 15 degrees tilt downwards looking on av
-        yaw = np.pi/2 + np.random.rand() / 9 * np.pi
+        roll = -np.pi / 6 - 1 / 18 * np.pi + np.random.rand() / 9 * np.pi
+        pitch = 0 - 1 / 18 * np.pi + np.random.rand() / 9 * np.pi  # 15 degrees tilt downwards looking on av
+        yaw = np.pi / 2 + np.random.rand() / 9 * np.pi
         random_y = -10 * np.random.rand() - 2  # between 2 and 5 meters
         random_x = -random_y / 2 * (np.random.rand() - 0.5)
         random_z = -random_y / 2 * np.random.rand() + 1
@@ -202,15 +207,15 @@ class DataCollectionGazebo:
 
     # Samples random camera position around a given centre which is a cone.
     # The camera is rotated to have the cone in sight.
-    def get_random_circle_position(self, centre = np.array([0,0])):
-        distance = np.random.rand() * 5 + 1.5
+    def get_random_circle_position(self, centre=np.array([0, 0])):
+        distance = np.random.rand() * 3.5 + 1.5
         yaw = np.random.rand() * 2 * np.pi
-        random_x = -np.cos(yaw)*distance + centre[0] + (np.random.rand()-0.5) * distance / 4
-        random_y = -np.sin(yaw)*distance + centre[1] + (np.random.rand()-0.5) * distance / 4
-        yaw_randomized = yaw + 1.2 * (np.random.rand()-0.5) * np.pi / 3
+        random_x = -np.cos(yaw) * distance + centre[0] + (np.random.rand() - 0.5) * distance / 4
+        random_y = -np.sin(yaw) * distance + centre[1] + (np.random.rand() - 0.5) * distance / 4
+        yaw_randomized = yaw + 1.2 * (np.random.rand() - 0.5) * np.pi / 3
         random_z = np.random.rand() * 2 + 1
-        roll = (np.random.rand()-.5) * np.pi/6
-        pitch = np.pi/8 + (np.random.rand()-0.5) * np.pi/6
+        roll = (np.random.rand() - .5) * np.pi / 6
+        pitch = np.pi / 8 + (np.random.rand() - 0.5) * np.pi / 6
         position = np.array([random_x, random_y, random_z, roll, pitch, yaw_randomized])
         return position
 
@@ -228,22 +233,22 @@ class DataCollectionGazebo:
         else:
             self.prev_zone = 0
             path_model = path_model_street
-        file_open = open(path_model,'r')
+        file_open = open(path_model, 'r')
         sdff = file_open.read()
-        self._spawn_model_prox("Boxed_flyzone", sdff, "flyzone_GE", postition, "world") #TODO make dynamic naming, hold in dict?
+        self._spawn_model_prox("Boxed_flyzone", sdff, "flyzone_GE", postition,
+                               "world")  # TODO make dynamic naming, hold in dict?
 
     def spawn_cone(self, max_cones):
-
         camera_location = [0, 0, 0]
         path_cone_model = f'src/sim/ros/gazebo/models/cone/cone.sdf'
         file_open = open(path_cone_model, 'r')
         sdff = file_open.read()
         distance = np.sqrt(camera_location[0] ** 2 + camera_location[1] ** 2)
         for i in range(max_cones):
-            rand_dist = distance + np.random.rand()*10
-            theta = 2*np.pi*(np.random.rand())
-            x_pos = -rand_dist*np.sin(theta) - camera_location[0]
-            y_pos = -rand_dist*np.cos(theta) - camera_location[1]
+            rand_dist = distance + np.random.rand() * 10
+            theta = 2 * np.pi * (np.random.rand())
+            x_pos = -rand_dist * np.sin(theta) - camera_location[0]
+            y_pos = -rand_dist * np.cos(theta) - camera_location[1]
             z_pos = 0
 
             postition = Pose()
@@ -253,21 +258,27 @@ class DataCollectionGazebo:
             # read sdf file
 
             cone_name = "cone_" + str(len(self.cone_dict))
-            self.cone_dict[cone_name] = [x_pos,y_pos,z_pos]
+            self.cone_dict[cone_name] = [x_pos, y_pos, z_pos]
             self._spawn_model_prox(cone_name, sdff, "flyzone_GE", postition,
                                    "world")  # TODO make dynamic naming, hold in dict?
         file_open.close()
 
-    def update_cone_locations(self, camera_position):
+    def update_cone_locations(self, camera_position, visible=False):
         distance = np.sqrt(camera_position[0] ** 2 + camera_position[1] ** 2)
         for key in self.cone_dict:
-            rand_dist = distance + 2 + np.random.rand() * 10
-            theta = 2 * np.pi * (np.random.rand())
-            x_pos = -rand_dist * np.sin(theta) - camera_position[0]
-            y_pos = -rand_dist * np.cos(theta) - camera_position[1]
+            rand_dist = distance + distance + 2 + np.random.rand() * 5
+            if visible==True:
+                theta = np.arctan(camera_position[1]/camera_position[0]) + (np.random.rand()-.5)*np.pi/6
+                if camera_position[0] > 0:
+                    theta += np.pi
+            else:
+                theta = 2 * np.pi * (np.random.rand())
+            x_pos = rand_dist * np.cos(theta) + camera_position[0]
+            y_pos = rand_dist * np.sin(theta) + camera_position[1]
             z_pos = 0
             new_pose = [x_pos, y_pos, z_pos]
             self.set_model_state(key, new_pose)
+            self.cone_dict[key] = new_pose
 
     def set_model_state(self, name: str, position):
         model_state = ModelState()
@@ -276,7 +287,7 @@ class DataCollectionGazebo:
         model_state.pose.position.x = position[0]
         model_state.pose.position.y = position[1]
         model_state.pose.position.z = position[2]
-        if len(position)>3:
+        if len(position) > 3:
             roll = position[3]
             pitch = position[4]
             yaw = position[5]
@@ -285,7 +296,7 @@ class DataCollectionGazebo:
             pitch = 0
             yaw = 0
         model_state.pose.orientation.x, model_state.pose.orientation.y, model_state.pose.orientation.z, \
-            model_state.pose.orientation.w = quaternion_from_euler_ZYX((yaw, pitch, roll))  # around x y z axis
+        model_state.pose.orientation.w = quaternion_from_euler_ZYX((yaw, pitch, roll))  # around x y z axis
         self._set_model_state(model_state)
 
     def delete_model(self, model_name):
@@ -303,6 +314,6 @@ if __name__ == "__main__":
         shutil.rmtree(configuration['output_path'], ignore_errors=True)
 
     data_col = DataCollectionGazebo(run_local=True)
-    amount_of_images = 100
-    data_col.generate_image(amount_of_images, create_hdf5=True, augmented=False, grayscale=True, max_cones = 20)
+    amount_of_images = 5
+    data_col.generate_image(amount_of_images, create_hdf5=True, augmented=False, grayscale=True, max_cones=1, output_cones=2)
     data_col.finish_collection()
