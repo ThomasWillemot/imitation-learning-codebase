@@ -1,0 +1,39 @@
+output_path: /media/thomas/Elements/training_nn/double_output
+number_of_epochs: 50
+episode_runner_config:
+  number_of_episodes: -1
+save_checkpoint_every_n: 10
+architecture_config:
+  architecture: double_cone_architecture
+  initialisation_type: xavier
+  batch_normalisation: true
+  random_seed: 123
+  device: cpu
+  dropout: 0.5
+  dtype: default
+  log_std: default
+trainer_config:
+  optimizer: Adam
+  learning_rate: 0.0005
+  weight_decay: 0.0001
+  factory_key: BASE
+  gradient_clip_norm: -1
+  data_loader_config:
+    hdf5_files:
+      - /media/thomas/Elements/experimental_data/test_double_cone/data_collection_gazebo/train.hdf5
+    random_seed: 123
+    balance_over_actions: false
+    batch_size: 32
+  criterion: MSELoss
+  device: cuda
+evaluator_config:
+  data_loader_config:
+    hdf5_files:
+      - /media/thomas/Elements/experimental_data/test_double_cone/data_collection_gazebo/validation.hdf5
+    random_seed: 123
+    balance_over_actions: false
+    batch_size: 32
+  criterion: MSELoss
+  store_projected_output_on_tensorboard: false
+  device: cuda
+tensorboard: true
