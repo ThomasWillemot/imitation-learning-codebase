@@ -37,6 +37,7 @@ class EvaluatorConfig(Config):
     store_output_on_tensorboard: bool = False
     store_feature_maps_on_tensorboard: bool = False
     store_projected_output_on_tensorboard: bool = False
+    split_losses: bool = False
 
 class Evaluator:
 
@@ -72,6 +73,9 @@ class Evaluator:
     def evaluate(self, epoch: int = -1, writer=None, tag: str = 'validation') -> Tuple[str, bool]:
         self.put_model_on_device()
         total_error = []
+        if self._config.split_losses:
+            total_error_1 = []
+            total_error_2 = []
         cntr = 0
 #        for batch in tqdm(self.data_loader.get_data_batch(), ascii=True, desc='evaluate'):
         for batch in self.data_loader.get_data_batch():
@@ -80,6 +84,14 @@ class Evaluator:
                 targets = data_to_tensor(batch.actions).type(self._net.dtype).to(self._device)
                 error = self._criterion(predictions,
                                         targets).mean()
+                if self._config.split_losses:
+                    temp_loss = self._criterion(predictions, targets)
+                    loss_1, loss_2 = torch.chunk(temp_loss, 2, dim=1)
+                    loss_1 = loss_1.mean()
+                    loss_2 = loss_2.mean()
+                if self._config.split_losses:
+                    total_error_1.append(loss_1.cpu().detach())
+                    total_error_2.append(loss_2.cpu().detach())
                 total_error.append(error)
                 if self._config.store_projected_output_on_tensorboard:
                     numpy_obs = batch.observations[0].numpy()
@@ -89,24 +101,42 @@ class Evaluator:
                     y_position = int(-np_pred[0][2] / np_pred[0][0] * 505.3 + 400.5)
                     if 0<x_position<848 and 0<y_position<800:
                         cone_circle_cv = cv2.circle(numpy_obs[0, :, :], (x_position, y_position), int(3.65*np_pred[0][0]), 1, 5)
-                        cone_circle_image_np = np.asarray(cone_circle_cv)
+                        cone_circle_image_np = cone_circle_cv
                     else:
-                        cone_circle_image_np = np.asarray(numpy_obs[0, :, :])
+                        cone_circle_image_np = numpy_obs[0, :, :]
+                    if self._config.split_losses:
+                        x_position_1 = int(-np_pred[0][4] / np_pred[0][3] * 505.3 + 424.5)
+                        y_position_1 = int(-np_pred[0][5] / np_pred[0][3] * 505.3 + 400.5)
+                        if 0 < x_position_1 < 848 and 0 < y_position_1 < 800:
+                            cone_circle_cv_1 = cv2.circle(cone_circle_image_np, (x_position_1, y_position_1),
+                                                        int(3.65 * np_pred[0][3]), 1, 5)
+                            cone_circle_image_np = np.asarray(cone_circle_cv_1)
+                        else:
+                            cone_circle_image_np = np.asarray(cone_circle_image_np)
                     zeros[0, :, :] = cone_circle_image_np
                     image_tensor = torch.from_numpy(zeros)
                     writer.write_output_image(image_tensor, f'{tag}/projected_cone/{cntr}')
                     cntr +=1
         error_distribution = Distribution(total_error)
+        if self._config.split_losses:
+            error_distribution_1 = Distribution(total_error_1)
+            error_distribution_2 = Distribution(total_error_2)
         self.put_model_back_to_original_device()
         if writer is not None:
             writer.write_distribution(error_distribution, tag)
+            if self._config.split_losses:
+                writer.write_distribution(error_distribution_1, 'validation_cone_1')
+                writer.write_distribution(error_distribution_2, 'validation_cone_2')
             if self._config.store_output_on_tensorboard and (epoch % 30 == 0 or tag == 'test'):
                 writer.write_output_image(predictions, f'{tag}/predictions')
                 writer.write_output_image(targets, f'{tag}/targets')
                 writer.write_output_image(torch.stack(batch.observations), f'{tag}/inputs')
 
-        msg = f' {tag} {self._config.criterion} {error_distribution.mean: 0.3e} [{error_distribution.std:0.2e}]'
-
+        if self._config.split_losses:
+            msg = f' validation cone 1 {self._config.criterion} {error_distribution_1.mean: 0.3e} [{error_distribution_1.std:0.2e}] \n ' \
+                  f' validation cone 2 {self._config.criterion} {error_distribution_2.mean: 0.3e} [{error_distribution_2.std:0.2e}]'
+        else:
+            msg = f' {tag} {self._config.criterion} {error_distribution.mean: 0.3e} [{error_distribution.std:0.2e}]'
         best_checkpoint = False
         if self._lowest_validation_loss is None or error_distribution.mean < self._lowest_validation_loss:
             self._lowest_validation_loss = error_distribution.mean
