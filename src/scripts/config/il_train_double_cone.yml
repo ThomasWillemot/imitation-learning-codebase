@@ -1,4 +1,4 @@
-output_path: /media/thomas/Elements/training_nn/double_output_4
+output_path: /media/thomas/Elements/training_nn/double_aug
 number_of_epochs: 100
 episode_runner_config:
   number_of_episodes: -1
@@ -21,7 +21,7 @@ trainer_config:
   gradient_clip_norm: -1
   data_loader_config:
     hdf5_files:
-      - /media/thomas/Elements/experimental_data/test_double_cone/data_collection_gazebo/train.hdf5
+      - /media/thomas/Elements/experimental_data/multi_cone_2_out/data_collection_gazebo/train.hdf5
     random_seed: 123
     balance_over_actions: false
     batch_size: 32
@@ -31,7 +31,7 @@ evaluator_config:
   split_losses: true
   data_loader_config:
     hdf5_files:
-      - /media/thomas/Elements/experimental_data/test_double_cone/data_collection_gazebo/validation.hdf5
+      - /media/thomas/Elements/experimental_data/multi_cone_2_out/data_collection_gazebo/validation.hdf5
     random_seed: 123
     balance_over_actions: false
     batch_size: 32

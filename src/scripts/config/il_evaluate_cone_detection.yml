@@ -1,21 +1,21 @@
-output_path: /media/thomas/Elements/training_nn/test_eval_double
+output_path: /media/thomas/Elements/training_nn/eval_double_aug
 number_of_epochs: 1
 episode_runner_config:
   number_of_episodes: 1
 architecture_config:
   architecture: double_cone_architecture
   device: cpu
-load_checkpoint_dir: /media/thomas/Elements/training_nn/double_output_4
+load_checkpoint_dir: /media/thomas/Elements/training_nn/double_aug
 evaluator_config:
-  split_losses: true
+  split_losses: false
   data_loader_config:
     hdf5_files:
-      - /media/thomas/Elements/experimental_data/test_double_cone/data_collection_gazebo/validation.hdf5
+      - /media/thomas/Elements/experimental_data/multi_cone_2_out/data_collection_gazebo/validation.hdf5
     random_seed: 123
     balance_over_actions: false
     batch_size: 1
     input_size: [1, 800, 848]
   store_projected_output_on_tensorboard: true
-  criterion: MSELoss
+  criterion: AbsErrorX
   device: cuda
 tensorboard: true

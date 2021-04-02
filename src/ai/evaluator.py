@@ -100,7 +100,7 @@ class Evaluator:
                     x_position = int(-np_pred[0][1] / np_pred[0][0] * 505.3 + 424.5)
                     y_position = int(-np_pred[0][2] / np_pred[0][0] * 505.3 + 400.5)
                     if 0<x_position<848 and 0<y_position<800:
-                        cone_circle_cv = cv2.circle(numpy_obs[0, :, :], (x_position, y_position), int(3.65*np_pred[0][0]), 1, 5)
+                        cone_circle_cv = cv2.circle(numpy_obs[0, :, :], (x_position, y_position), int(50/np_pred[0][0]), 1, 5)
                         cone_circle_image_np = cone_circle_cv
                     else:
                         cone_circle_image_np = numpy_obs[0, :, :]
@@ -109,7 +109,7 @@ class Evaluator:
                         y_position_1 = int(-np_pred[0][5] / np_pred[0][3] * 505.3 + 400.5)
                         if 0 < x_position_1 < 848 and 0 < y_position_1 < 800:
                             cone_circle_cv_1 = cv2.circle(cone_circle_image_np, (x_position_1, y_position_1),
-                                                        int(3.65 * np_pred[0][3]), 1, 5)
+                                                        int(50 / np_pred[0][3]), 1, 5)
                             cone_circle_image_np = np.asarray(cone_circle_cv_1)
                         else:
                             cone_circle_image_np = np.asarray(cone_circle_image_np)

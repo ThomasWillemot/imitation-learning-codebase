@@ -30,7 +30,7 @@ class DataCollectionGazebo:
 
     def __init__(self, run_local=True):
         if run_local:
-            self.output_dir = f'/media/thomas/Elements/experimental_data/test_brol/{get_filename_without_extension(__file__)}'
+            self.output_dir = f'/media/thomas/Elements/experimental_data/multi_cone_2_out/{get_filename_without_extension(__file__)}'
         else:
             self.output_dir = f'/esat/opal/r0667559/data'
             # self.output_dir = f'{get_data_dir(os.environ["DATADIR"])}/cone_data/{get_filename_without_extension(__file__)}'
@@ -105,10 +105,7 @@ class DataCollectionGazebo:
             # make changes in gazebo
             position_camera = self.get_random_circle_position()
             self._unpause_client(EmptyRequest())
-            if max_cones > 1:
-                self.update_cone_locations(position_camera, visible=False)
-            elif max_cones == 1:
-                self.update_cone_locations(position_camera, visible=True)
+            self.update_cone_locations(position_camera)
             self.set_model_state(model_name, position_camera)
             time.sleep(0.5)
             # Collection of annotated data.
@@ -208,12 +205,12 @@ class DataCollectionGazebo:
     # Samples random camera position around a given centre which is a cone.
     # The camera is rotated to have the cone in sight.
     def get_random_circle_position(self, centre=np.array([0, 0])):
-        distance = np.random.rand() * 3.5 + 1.5
+        distance = np.random.rand() * 3 + 1
         yaw = np.random.rand() * 2 * np.pi
         random_x = -np.cos(yaw) * distance + centre[0] + (np.random.rand() - 0.5) * distance / 4
         random_y = -np.sin(yaw) * distance + centre[1] + (np.random.rand() - 0.5) * distance / 4
         yaw_randomized = yaw + 1.2 * (np.random.rand() - 0.5) * np.pi / 3
-        random_z = np.random.rand() * 2 + 1
+        random_z = np.random.rand() * 2.5 + 0.5
         roll = (np.random.rand() - .5) * np.pi / 6
         pitch = np.pi / 8 + (np.random.rand() - 0.5) * np.pi / 6
         position = np.array([random_x, random_y, random_z, roll, pitch, yaw_randomized])
@@ -263,15 +260,17 @@ class DataCollectionGazebo:
                                    "world")  # TODO make dynamic naming, hold in dict?
         file_open.close()
 
-    def update_cone_locations(self, camera_position, visible=False):
+    def update_cone_locations(self, camera_position):
         distance = np.sqrt(camera_position[0] ** 2 + camera_position[1] ** 2)
         for key in self.cone_dict:
-            rand_dist = distance + distance + 2 + np.random.rand() * 5
-            if visible==True:
+
+            if key == "cone_0":
+                rand_dist = distance + 1 + np.random.rand() * 4
                 theta = np.arctan(camera_position[1]/camera_position[0]) + (np.random.rand()-.5)*np.pi/6
                 if camera_position[0] > 0:
                     theta += np.pi
             else:
+                rand_dist = distance + 5 + np.random.rand() * 5
                 theta = 2 * np.pi * (np.random.rand())
             x_pos = rand_dist * np.cos(theta) + camera_position[0]
             y_pos = rand_dist * np.sin(theta) + camera_position[1]
@@ -314,6 +313,6 @@ if __name__ == "__main__":
         shutil.rmtree(configuration['output_path'], ignore_errors=True)
 
     data_col = DataCollectionGazebo(run_local=True)
-    amount_of_images = 5
-    data_col.generate_image(amount_of_images, create_hdf5=True, augmented=False, grayscale=True, max_cones=1, output_cones=2)
+    amount_of_images = 200
+    data_col.generate_image(amount_of_images, create_hdf5=True, augmented=False, grayscale=True, max_cones=10, output_cones=2)
     data_col.finish_collection()
