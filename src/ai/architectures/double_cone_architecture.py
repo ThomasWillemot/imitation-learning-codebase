@@ -31,20 +31,31 @@ class Net(BaseNet):
         self.batch_normalisation = config.batch_normalisation if isinstance(config.batch_normalisation, bool) \
             else False
         self.encoder = nn.Sequential(
-            nn.Conv2d(1, 8, 3, stride=2,padding=1),
+            nn.Conv2d(1, 8, 3, stride=2,padding=2),
             nn.ReLU(),
-            nn.MaxPool2d(2, stride=2),
-            nn.Conv2d(8, 16, 3, stride=2,padding=1),
+            nn.Conv2d(8, 12, 3, stride=2,padding=2),
             nn.ReLU(),
-            nn.MaxPool2d(2, stride=2),
-            nn.Conv2d(16, 32, 3, stride=2,padding=1),
+            nn.Conv2d(12, 16, 3, stride=2, padding=2),
             nn.ReLU(),
-            nn.MaxPool2d(2, stride=2),
-            nn.Conv2d(32, 64, 3, stride=2,padding=1),
+            nn.Conv2d(16, 24, 3, stride=2, padding=2),
             nn.ReLU(),
-            nn.MaxPool2d(2, stride=2),
+            nn.Conv2d(24, 24, 3, stride=2, padding=2),
+            nn.ReLU(),
+            nn.Conv2d(24, 24, 3, stride=2, padding=2),
+            nn.ReLU(),
+            nn.Conv2d(24, 24, 3, stride=2, padding=2),
+            nn.ReLU(),
+            nn.Conv2d(24, 24, 3, stride=2, padding=2),
+            nn.ReLU(),
+            nn.Conv2d(24, 24, 3, stride=2, padding=2),
+            nn.ReLU(),
+            nn.Conv2d(24, 24, 3, stride=2, padding=2),
+            nn.ReLU(),
+
+
+
         )
-        self.decoder = mlp_creator(sizes=[576, 128, self.output_size[0]],
+        self.decoder = mlp_creator(sizes=[216, 64, self.output_size[0]],
                                    activation=nn.ReLU(),
                                    output_activation=nn.Identity(),
                                    bias_in_last_layer=False)
