@@ -116,8 +116,11 @@ class Experiment:
                 self._config.load_checkpoint_dir = f'{get_data_dir(self._config.output_path)}/' \
                                                    f'{self._config.load_checkpoint_dir}'
             self.load_checkpoint(self._config.load_checkpoint_dir)
-
+        cprint(f'Parameters = {self.count_parameters(self._net)}', self._logger)
         cprint(f'Initiated.', self._logger)
+
+    def count_parameters(self, model):
+        return sum(p.numel() for p in model.parameters() if p.requires_grad)
 
     def run(self):
         for self._epoch in range(self._config.number_of_epochs):
