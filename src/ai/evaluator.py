@@ -95,7 +95,7 @@ class Evaluator:
                 total_error.append(error)
                 if self._config.store_projected_output_on_tensorboard:
                     numpy_obs = batch.observations[0].numpy()
-                    zeros = np.zeros((1, 800, 848))
+                    zeros = np.zeros(numpy_obs.shape)
                     np_pred = predictions.cpu().numpy()
                     x_position = int(-np_pred[0][1] / np_pred[0][0] * 505.3 + 424.5)
                     y_position = int(-np_pred[0][2] / np_pred[0][0] * 505.3 + 400.5)
