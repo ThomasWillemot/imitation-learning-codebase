@@ -28,9 +28,9 @@ from src.core.config_loader import Config, Parser
 # Class for data collection in a gazebo world.
 class DataCollectionGazebo:
 
-    def __init__(self, run_local=True):
+    def __init__(self, output_path, run_local=True):
         if run_local:
-            self.output_dir = f'/media/thomas/Elements/experimental_data/multi_cone_2_out/{get_filename_without_extension(__file__)}'
+            self.output_dir = f'/media/thomas/Elements/experimental_data/{output_path}/{get_filename_without_extension(__file__)}'
         else:
             self.output_dir = f'/esat/opal/r0667559/data'
             # self.output_dir = f'{get_data_dir(os.environ["DATADIR"])}/cone_data/{get_filename_without_extension(__file__)}'
@@ -99,6 +99,7 @@ class DataCollectionGazebo:
             self._delete_model('Boxed_flyzone')
         # Main loop to create images.
         for data_collect_amount in range(total_data):
+            print(data_collect_amount)
             if augmented and np.random.rand() > 0.5:
                 self.delete_model('Boxed_flyzone')
                 self.spawn_drone_room(np.array([-2.5, 0, 0]))
@@ -125,7 +126,6 @@ class DataCollectionGazebo:
                 position_cone = np.array([pose_gazebo_cone.x, pose_gazebo_cone.y, pose_gazebo_cone.z])
                 image_np = self.post_process_image(image, binary=grayscale)
                 # overcome saving double images, would generate a sequence of identical data
-                print(image.header.seq)
                 prev_seq_nb = image.header.seq
                 # Generate an experience
                 experience = Experience()
@@ -163,6 +163,8 @@ class DataCollectionGazebo:
 
     # Does postprocess for binary images
     def post_process_image(self, image, binary=False):
+        height = 200
+        width = 212
         cv_im = self.bridge.imgmsg_to_cv2(image, desired_encoding='passthrough')  # process image
         if binary:
             # cv_im = cv2.cvtColor(cv_im, cv2.COLOR_RGB2GRAY)
@@ -171,17 +173,20 @@ class DataCollectionGazebo:
             mask = cv2.imread(mask_path, 0)
             row_sum = np.sum(binary_image, axis=1)  # should be 800 high
             i = 0
-            while row_sum[i] > 255 and i < 799:
-                binary_image[i, :] = np.zeros(848)
+            while row_sum[i] > 255 and i < height-1:
+                binary_image[i, :] = 0
                 i += 1
             airrow = 0
-            for row_idx in range(799):
-                if row_sum[row_idx] > 400 * 255:
+            for row_idx in range(height-1):
+                if row_sum[row_idx] > width/2 * 255:
                     airrow = row_idx
                 if row_sum[row_idx] == 1:
                     binary_image[row_idx, :] = 0
             binary_image[1:airrow, :] = 0
-            img_masked = cv2.bitwise_and(binary_image, mask)
+            if height == 800 and width == 848:
+                img_masked = cv2.bitwise_and(binary_image, mask)
+            else:
+                img_masked = binary_image
             image_np_gray = np.asarray(img_masked)
             image_np = image_np_gray
         else:
@@ -311,8 +316,7 @@ if __name__ == "__main__":
         if not configuration['output_path'].startswith('/'):
             configuration['output_path'] = os.path.join(get_data_dir(os.environ['HOME']), configuration['output_path'])
         shutil.rmtree(configuration['output_path'], ignore_errors=True)
-
-    data_col = DataCollectionGazebo(run_local=True)
-    amount_of_images = 200
+    data_col = DataCollectionGazebo(output_path='200_res', run_local=True)
+    amount_of_images = 400
     data_col.generate_image(amount_of_images, create_hdf5=True, augmented=False, grayscale=True, max_cones=10, output_cones=2)
     data_col.finish_collection()
