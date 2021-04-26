@@ -196,3 +196,5 @@ test_dir/
 *.sif
 
 src/sim/ros/python3_ros_ws/src/imitation_learning_ros_package/rosnodes/all_pics/
+
+src/sim/ros/python3_ros_ws/src/handcrafted_cone_detection/
