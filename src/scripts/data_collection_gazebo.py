@@ -5,6 +5,8 @@ import rospy
 import numpy as np
 import cv2
 import time
+
+import torch
 from networkx.readwrite.tests.test_yaml import yaml
 from sensor_msgs.msg import Image, CameraInfo
 from src.core.utils import get_filename_without_extension, get_data_dir
@@ -63,7 +65,7 @@ class DataCollectionGazebo:
             'output_path': self.output_dir,
             'separate_raw_data_runs': True,
             'store_hdf5': True,
-            'training_validation_split': 0.9
+            'training_validation_split': 0
         }
         # Create data saver
         config_datasaver = DataSaverConfig().create(config_dict=config_dict)
@@ -81,6 +83,12 @@ class DataCollectionGazebo:
         rospy.wait_for_service('gazebo/delete_model')
         self._delete_model = rospy.ServiceProxy('gazebo/delete_model', DeleteModel)
         print('proxys initialised')
+        self.spawn_camera()
+        print("cam launched")
+        time.sleep(10)
+        time.sleep(10)
+        time.sleep(10)
+        print("waiting finished")
 
     # Collection of data in simulation environment gazebo.
     # Data is saved as experiments and written to the output folder.
@@ -165,6 +173,7 @@ class DataCollectionGazebo:
     def post_process_image(self, image, binary=False):
         height = 200
         width = 212
+        use_frame_mask = True
         cv_im = self.bridge.imgmsg_to_cv2(image, desired_encoding='passthrough')  # process image
         if binary:
             # cv_im = cv2.cvtColor(cv_im, cv2.COLOR_RGB2GRAY)
@@ -183,8 +192,9 @@ class DataCollectionGazebo:
                 if row_sum[row_idx] == 1:
                     binary_image[row_idx, :] = 0
             binary_image[1:airrow, :] = 0
-            if height == 800 and width == 848:
-                img_masked = cv2.bitwise_and(binary_image, mask)
+            if use_frame_mask:
+                sampled_mask = self.downsample_image(mask, 4)
+                img_masked = cv2.bitwise_and(binary_image, sampled_mask)
             else:
                 img_masked = binary_image
             image_np_gray = np.asarray(img_masked)
@@ -265,6 +275,16 @@ class DataCollectionGazebo:
                                    "world")  # TODO make dynamic naming, hold in dict?
         file_open.close()
 
+    def spawn_camera(self):
+        path_cam_dist = f'src/sim/ros/gazebo/models/fisheye_cam/model.sdf'
+        file_open = open(path_cam_dist, 'r')
+        sdff = file_open.read()
+        posit = Pose()
+        posit.position.x = 2
+        posit.position.y = 0
+        posit.position.z = 1
+        self._spawn_model_prox("dist_cam", sdff, "cam", posit, "world")
+
     def update_cone_locations(self, camera_position):
         distance = np.sqrt(camera_position[0] ** 2 + camera_position[1] ** 2)
         for key in self.cone_dict:
@@ -306,6 +326,14 @@ class DataCollectionGazebo:
     def delete_model(self, model_name):
         self._delete_model(model_name)
 
+    def downsample_image(self, image, factor: int):
+        img = np.array(image, dtype='float32')
+        img = torch.from_numpy(img.reshape(1, 1, img.shape[0], img.shape[1]))  # Convert grayscale image to tensor
+        maxPool = torch.nn.MaxPool2d(factor)  # 4*4 window, maximum pooling with a step size of 4
+        img_tensor = maxPool(img)
+        img = torch.squeeze(img_tensor)  # Remove the dimension of 1
+        img = img.numpy().astype('uint8')  # Conversion format, ready to output
+        return img
 
 if __name__ == "__main__":
     arguments = Parser().parse_args()
@@ -316,7 +344,7 @@ if __name__ == "__main__":
         if not configuration['output_path'].startswith('/'):
             configuration['output_path'] = os.path.join(get_data_dir(os.environ['HOME']), configuration['output_path'])
         shutil.rmtree(configuration['output_path'], ignore_errors=True)
-    data_col = DataCollectionGazebo(output_path='200_res', run_local=True)
-    amount_of_images = 400
+    data_col = DataCollectionGazebo(output_path='test_dist_cam', run_local=True)
+    amount_of_images = 5
     data_col.generate_image(amount_of_images, create_hdf5=True, augmented=False, grayscale=True, max_cones=10, output_cones=2)
     data_col.finish_collection()

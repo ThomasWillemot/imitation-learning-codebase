@@ -25,7 +25,7 @@ class WaypointExtractor:
         rospy.init_node('waypoint_extractor_server')
         self.bridge = CvBridge()
         dim = (848, 800)
-        self.threshold = 180
+        self.threshold = 95
         k = np.array(
             [[285.95001220703125, 0.0, 418.948486328125], [0.0, 286.0592956542969, 405.756103515625], [0.0, 0.0, 1.0]])
         d = np.array(
@@ -36,6 +36,8 @@ class WaypointExtractor:
         self.x = 0
         self.y = 0
         self.z = 0
+        self.mask = cv2.imread('src/sim/ros/python3_ros_ws/src/handcrafted_cone_detection/src/frame_drone_mask.png', 0)
+        self.kernel = np.ones((3, 3), np.uint8)
         self.x_array_med = [0, 0, 0, 0, 0]
         self.y_array_med = [0, 0, 0, 0, 0]
         self.z_array_med = [0, 0, 0, 0, 0]
@@ -45,7 +47,7 @@ class WaypointExtractor:
         self.image1_buffer = []
         self.image2_buffer = []
         self.image_stamp = rospy.Time(0)
-        self._init_fsm_handshake_srv()
+        #TODO enable if on drone self._init_fsm_handshake_srv()
         self.pub = rospy.Publisher('cone_coordin', ConeImgLoc, queue_size=10)
         self.thresh_pub = rospy.Publisher('threshold_im', Image, queue_size=10)
     # Function to extract the cone out of an image. The part of the cone(s) are binary ones, the other parts are 0.
@@ -57,19 +59,26 @@ class WaypointExtractor:
 
     # Extract the 2d location in the image after segmentation.
     def get_cone_2d_location(self, bin_im, left):
+        plot_im = bin_im
         row_sum = np.sum(bin_im, axis=1)
-        i = 0
-
-        while row_sum[i] > 1 and i < 799:
-            bin_im[i, :] = np.zeros(848)
-            i += 1
-
-        airrow = 0
         for row_idx in range(799):
             if row_sum[row_idx] > 400 * 255:
                 airrow = row_idx
-        bin_im[1:airrow, :] = 0
-        row_sum = np.sum(bin_im, axis=1)
+        bin_im[0:airrow, :] = 0
+        i = airrow
+        prev_empty = False
+        while i < 799:
+            curr_empty = row_sum[i] > 255
+            if curr_empty:
+                bin_im[i, :] = np.zeros(848)
+            elif prev_empty:
+                break
+            else:
+                prev_empty = True
+            i += 1
+        filtered_np_gray = cv2.morphologyEx(bin_im, cv2.MORPH_OPEN, self.kernel)
+        img_masked = cv2.bitwise_and(filtered_np_gray, self.mask)
+        row_sum = np.sum(img_masked, axis=1)
         cone_found = False
         cone_row = 0
         max_row = 0
@@ -89,7 +98,7 @@ class WaypointExtractor:
         max_width = 0
         current_width = 0
         for col_index in range(847):
-            if bin_im[cone_row, col_index] == 0:
+            if img_masked[cone_row, col_index] == 0:
                 if current_width > max_width:
                     max_width = current_width
                     max_start = current_start
@@ -101,7 +110,7 @@ class WaypointExtractor:
                 current_width += 1
         if left:
             self.image_publisher(max_start, cone_row, max_width)
-            self.threshol_image_publish(bin_im, max_start, cone_row, max_width)
+            self.threshol_image_publish(plot_im, max_start, cone_row, max_width)
         return [max_start + int(np.ceil(max_width / 2)) - 424, -cone_row + 400, max_width]
 
     def get_depth_triang(self, im_coor_1, im_coor_2):
@@ -129,12 +138,10 @@ class WaypointExtractor:
         rect_image = cv2.remap(cv_im, self.map1, self.map2, interpolation=cv2.INTER_LINEAR,
                                borderMode=cv2.BORDER_CONSTANT)  # Remap fisheye to normal picture
         cut_off = 335
-        rect_image[848 - cut_off:848, :] = 0  # set the drone frame as zeros. Should not be detected as cone.
+        #rect_image[848 - cut_off:848, :] = 0  # set the drone frame as zeros. Should not be detected as cone.
 
         # Cone segmentation
         bin_im = self.get_cone_binary(rect_image, threshold=self.threshold)
-
-
 
         # Positioning in 2D of cone parts
         loc_2d = self.get_cone_2d_location(bin_im, left)
