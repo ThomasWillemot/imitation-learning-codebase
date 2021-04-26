@@ -94,22 +94,23 @@ class Evaluator:
                     total_error_2.append(loss_2.cpu().detach())
                 total_error.append(error)
                 if self._config.store_projected_output_on_tensorboard:
+                    scaling_factor = 4
                     numpy_obs = batch.observations[0].numpy()
                     zeros = np.zeros(numpy_obs.shape)
                     np_pred = predictions.cpu().numpy()
-                    x_position = int(-np_pred[0][1] / np_pred[0][0] * 505.3 + 424.5)
-                    y_position = int(-np_pred[0][2] / np_pred[0][0] * 505.3 + 400.5)
-                    if 0<x_position<848 and 0<y_position<800:
-                        cone_circle_cv = cv2.circle(numpy_obs[0, :, :], (x_position, y_position), int(50/np_pred[0][0]), 1, 5)
+                    x_position = int(-np_pred[0][1] / np_pred[0][0] * 505.3/scaling_factor + 424.5/scaling_factor)
+                    y_position = int(-np_pred[0][2] / np_pred[0][0] * 505.3/scaling_factor + 400.5/scaling_factor)
+                    if 0<x_position<848/scaling_factor and 0<y_position<800/scaling_factor:
+                        cone_circle_cv = cv2.circle(numpy_obs[0, :, :], (x_position, y_position), int(50/np_pred[0][0]/scaling_factor), 1, int(5/scaling_factor))
                         cone_circle_image_np = cone_circle_cv
                     else:
                         cone_circle_image_np = numpy_obs[0, :, :]
                     if self._config.split_losses:
-                        x_position_1 = int(-np_pred[0][4] / np_pred[0][3] * 505.3 + 424.5)
-                        y_position_1 = int(-np_pred[0][5] / np_pred[0][3] * 505.3 + 400.5)
-                        if 0 < x_position_1 < 848 and 0 < y_position_1 < 800:
+                        x_position_1 = int(-np_pred[0][4] / np_pred[0][3] * 505.3/scaling_factor + 424.5/scaling_factor)
+                        y_position_1 = int(-np_pred[0][5] / np_pred[0][3] * 505.3/scaling_factor + 400.5/scaling_factor)
+                        if 0 < x_position_1 < 848 and 0 < y_position_1 < 800/scaling_factor:
                             cone_circle_cv_1 = cv2.circle(cone_circle_image_np, (x_position_1, y_position_1),
-                                                        int(50 / np_pred[0][3]), 1, 5)
+                                                        int(50 /scaling_factor / np_pred[0][3]), 1, int(5/scaling_factor))
                             cone_circle_image_np = np.asarray(cone_circle_cv_1)
                         else:
                             cone_circle_image_np = np.asarray(cone_circle_image_np)

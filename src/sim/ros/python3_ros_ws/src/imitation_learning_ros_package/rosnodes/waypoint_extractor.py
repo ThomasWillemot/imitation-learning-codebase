@@ -22,7 +22,7 @@ class WaypointExtractor:
 
     def __init__(self):
         self.bridge = CvBridge()
-        dim = (800, 848)
+        dim = (848, 800)
         k = np.array(
             [[285.95001220703125, 0.0, 418.948486328125], [0.0, 286.0592956542969, 405.756103515625], [0.0, 0.0, 1.0]])
         d = np.array(
@@ -37,7 +37,7 @@ class WaypointExtractor:
         self.x_orig = 0
         self.y_orig = 0
         self.z_orig = 0
-        self.imagexite_rec = 0
+        self.image_rec = 0
         rospy.init_node('waypoint_extractor_server')
 
     # Function to extract the cone out of an image. The part of the cone(s) are binary ones, the other parts are 0.
@@ -133,11 +133,14 @@ class WaypointExtractor:
 
     # Extracts the waypoints (3d location) out of the current image.
     def extract_waypoint_1(self, image):
+        print(self.counter)
         cv_im = self.bridge.imgmsg_to_cv2(image, desired_encoding='passthrough')  # Load images to cv
         current_image = cv2.remap(cv_im, self.map1, self.map2, interpolation=cv2.INTER_LINEAR,
                                   borderMode=cv2.BORDER_CONSTANT)  # Remap fisheye to normal picture
-        path = 'gate_rec/'+str(self.counter) + '_1.jpg'
+
+        path = '/media/thomas/Elements/calibration_images/batch_4/'+str(self.counter) + '.jpg'
         cv2.imwrite(path, current_image)
+        self.counter += 1
         # Cone segmentation
         #bin_im = self.get_cone_binary(current_image, threshold=80)
         # Positioning in 2D of cone parts
@@ -152,14 +155,15 @@ class WaypointExtractor:
         # tunefactor calculated by distance[m]*pixels of ob/seize obj[m]
 
     def extract_waypoint_2(self, image):
-        cv_im = self.bridge.imgmsg_to_cv2(image, desired_encoding='passthrough')  # Load images to cv
-        path = 'gate_rec/' + str(self.counter) + '_2.jpg'
-        self.counter += 1
-        cv2.imwrite(path, cv_im)
+        None
+        #cv_im = self.bridge.imgmsg_to_cv2(image, desired_encoding='passthrough')  # Load images to cv
+        #path = 'gate_rec/' + str(self.counter) + '_2.jpg'
+        #self.counter += 1
+        #cv2.imwrite(path, cv_im)
 
-        current_image = cv2.remap(cv_im, self.map1, self.map2, interpolation=cv2.INTER_LINEAR,
-                                  borderMode=cv2.BORDER_CONSTANT)  # Remap fisheye to normal picture
-        cv2.imwrite(path, current_image)
+        #current_image = cv2.remap(cv_im, self.map1, self.map2, interpolation=cv2.INTER_LINEAR,
+        #                          borderMode=cv2.BORDER_CONSTANT)  # Remap fisheye to normal picture
+        #cv2.imwrite(path, current_image)
 
         # Cone segmentation
         #bin_im = self.get_cone_binary(current_image, threshold=80)
@@ -196,13 +200,13 @@ class WaypointExtractor:
     # Subscribes to topics and and runs callbacks
     def image_subscriber(self):
         rospy.Subscriber("/camera/fisheye1/image_raw", Image, self.extract_waypoint_1)
-        rospy.Subscriber("/camera/fisheye2/image_raw", Image, self.extract_waypoint_2)
+        #rospy.Subscriber("/camera/fisheye2/image_raw", Image, self.extract_waypoint_2)
         #rospy.Subscriber("/tf", TFMessage, self.update_angles)
 
     # Starts all needed functionalities
     def run(self):
         self.image_subscriber()
-        self.rel_cor_server()
+        #self.rel_cor_server()
         rospy.spin()
 
 

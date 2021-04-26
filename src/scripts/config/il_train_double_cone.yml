@@ -1,12 +1,12 @@
-output_path: /media/thomas/Elements/training_nn/double_aug
+output_path: /media/thomas/Elements/training_nn/res_200/l1_loss
 number_of_epochs: 100
 episode_runner_config:
   number_of_episodes: -1
 save_checkpoint_every_n: 10
 architecture_config:
-  architecture: double_cone_architecture
+  architecture: cone_200_architecture
   initialisation_type: xavier
-  batch_normalisation: true
+  batch_normalisation: false
   random_seed: 123
   device: cpu
   dropout: 0.5
@@ -15,23 +15,24 @@ architecture_config:
 trainer_config:
   split_losses: true
   optimizer: Adam
-  learning_rate: 0.0005
-  weight_decay: 0.00001
+  learning_rate: 0.0002
+  weight_decay: 0.00005
   factory_key: BASE
   gradient_clip_norm: -1
   data_loader_config:
+    loop_over_hdf5_files: false
     hdf5_files:
-      - /media/thomas/Elements/experimental_data/multi_cone_2_out/data_collection_gazebo/train.hdf5
+      - /media/thomas/Elements/experimental_data/200_res/data_collection_gazebo/train.hdf5
     random_seed: 123
     balance_over_actions: false
     batch_size: 32
-  criterion: MSELoss
+  criterion: L1Loss
   device: cuda
 evaluator_config:
   split_losses: true
   data_loader_config:
     hdf5_files:
-      - /media/thomas/Elements/experimental_data/multi_cone_2_out/data_collection_gazebo/validation.hdf5
+      - /media/thomas/Elements/experimental_data/200_res/data_collection_gazebo/validation.hdf5
     random_seed: 123
     balance_over_actions: false
     batch_size: 32
