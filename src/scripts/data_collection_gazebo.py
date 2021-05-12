@@ -83,11 +83,6 @@ class DataCollectionGazebo:
         rospy.wait_for_service('gazebo/delete_model')
         self._delete_model = rospy.ServiceProxy('gazebo/delete_model', DeleteModel)
         print('proxys initialised')
-        self.spawn_camera()
-        print("cam launched")
-        time.sleep(10)
-        time.sleep(10)
-        time.sleep(10)
         print("waiting finished")
 
     # Collection of data in simulation environment gazebo.
@@ -171,9 +166,9 @@ class DataCollectionGazebo:
 
     # Does postprocess for binary images
     def post_process_image(self, image, binary=False):
-        height = 200
-        width = 212
-        use_frame_mask = True
+        height = 800
+        width = 848
+        use_frame_mask = False
         cv_im = self.bridge.imgmsg_to_cv2(image, desired_encoding='passthrough')  # process image
         if binary:
             # cv_im = cv2.cvtColor(cv_im, cv2.COLOR_RGB2GRAY)
@@ -193,7 +188,7 @@ class DataCollectionGazebo:
                     binary_image[row_idx, :] = 0
             binary_image[1:airrow, :] = 0
             if use_frame_mask:
-                sampled_mask = self.downsample_image(mask, 4)
+                sampled_mask = self.downsample_image(mask, 1)
                 img_masked = cv2.bitwise_and(binary_image, sampled_mask)
             else:
                 img_masked = binary_image
@@ -275,16 +270,6 @@ class DataCollectionGazebo:
                                    "world")  # TODO make dynamic naming, hold in dict?
         file_open.close()
 
-    def spawn_camera(self):
-        path_cam_dist = f'src/sim/ros/gazebo/models/fisheye_cam/model.sdf'
-        file_open = open(path_cam_dist, 'r')
-        sdff = file_open.read()
-        posit = Pose()
-        posit.position.x = 2
-        posit.position.y = 0
-        posit.position.z = 1
-        self._spawn_model_prox("dist_cam", sdff, "cam", posit, "world")
-
     def update_cone_locations(self, camera_position):
         distance = np.sqrt(camera_position[0] ** 2 + camera_position[1] ** 2)
         for key in self.cone_dict:
@@ -344,7 +329,7 @@ if __name__ == "__main__":
         if not configuration['output_path'].startswith('/'):
             configuration['output_path'] = os.path.join(get_data_dir(os.environ['HOME']), configuration['output_path'])
         shutil.rmtree(configuration['output_path'], ignore_errors=True)
-    data_col = DataCollectionGazebo(output_path='test_dist_cam', run_local=True)
-    amount_of_images = 5
-    data_col.generate_image(amount_of_images, create_hdf5=True, augmented=False, grayscale=True, max_cones=10, output_cones=2)
+    data_col = DataCollectionGazebo(output_path='model_evaluation_handcrafted', run_local=True)
+    amount_of_images = 200
+    data_col.generate_image(amount_of_images, create_hdf5=False, augmented=False, grayscale=True, max_cones=10, output_cones=2)
     data_col.finish_collection()
