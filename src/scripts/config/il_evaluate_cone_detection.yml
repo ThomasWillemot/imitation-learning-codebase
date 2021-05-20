@@ -1,21 +1,21 @@
-output_path: /media/thomas/Elements/training_nn/eval_test_set_200_10_cones_augmented
+output_path: /media/thomas/Elements/training_nn/test_bebop_proj_3_mse
 number_of_epochs: 1
 episode_runner_config:
   number_of_episodes: 1
 architecture_config:
-  architecture: cone_200_architecture
+  architecture: bebop_400_arch_2
   device: cpu
-load_checkpoint_dir: /media/thomas/Elements/training_nn/res_200/6100_lr_0002
+load_checkpoint_dir: /media/thomas/Elements/training_nn/bebop_high_res/net_str_1_new_ARCH_5
 evaluator_config:
-  split_losses: false
+  split_losses: true
   data_loader_config:
     hdf5_files:
-      - /media/thomas/Elements/experimental_data/test_set_200_10_props/data_collection_gazebo/validation.hdf5
+      - /media/thomas/Elements/experimental_data/bebop_high_res/data_collection_gazebo/validation.hdf5
     random_seed: 123
     balance_over_actions: false
     batch_size: 1
-    input_size: [1, 200, 212]
+    input_size: [1, 240, 428]
   store_projected_output_on_tensorboard: true
-  criterion: AbsErrorX
+  criterion: MSELoss
   device: cuda
 tensorboard: true

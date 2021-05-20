@@ -65,7 +65,7 @@ class DataCollectionGazebo:
             'output_path': self.output_dir,
             'separate_raw_data_runs': True,
             'store_hdf5': True,
-            'training_validation_split': 0
+            'training_validation_split': 0.9
         }
         # Create data saver
         config_datasaver = DataSaverConfig().create(config_dict=config_dict)
@@ -88,7 +88,7 @@ class DataCollectionGazebo:
     # Collection of data in simulation environment gazebo.
     # Data is saved as experiments and written to the output folder.
     # Input: amount of images to produce.
-    def generate_image(self, total_data, create_hdf5=False, augmented=True, grayscale=False, max_cones=1, output_cones=1):
+    def generate_image(self, total_data, create_hdf5=False, augmented=True, grayscale=False, max_cones=1, output_cones=1,label_empty=False):
         model_name = rospy.get_param('/robot/model_name')
         cone_name = 'Cone'
         self._set_model_state.wait_for_service()
@@ -132,11 +132,19 @@ class DataCollectionGazebo:
                 prev_seq_nb = image.header.seq
                 # Generate an experience
                 experience = Experience()
+                black_image = np.random.randn() < 0.1
                 experience.done = TerminationType.NotDone
                 if data_collect_amount == total_data:
                     experience.done = TerminationType.Done
                 if output_cones == 1:
-                    experience.action = self.generate_annotation_cone_from_quat(position_out, position_cone, quat)
+                    if label_empty == True:
+                        action_pos = self.generate_annotation_cone_from_quat(position_out, position_cone, quat)
+                        if black_image:
+                            experience.action = np.array([0, 0, 0, 0])
+                        else:
+                            experience.action = np.array([action_pos[0], action_pos[1], action_pos[2], 1])
+                    else:
+                        experience.action = self.generate_annotation_cone_from_quat(position_out, position_cone, quat)
                 elif output_cones == 2:
                     cone_1_outputs = self.generate_annotation_cone_from_quat(position_out, position_cone, quat)
                     cone_2_outputs = self.generate_annotation_cone_from_quat(position_out, self.cone_dict["cone_0"], quat)
@@ -145,6 +153,8 @@ class DataCollectionGazebo:
                 experience.info = {"x": position_camera[0]}
                 while image is None:
                     time.sleep(0.01)
+                if black_image and label_empty:
+                    image_np[:, :] = 0
                 experience.observation = image_np
                 self._data_saver.save(experience)
                 image = None
@@ -166,8 +176,8 @@ class DataCollectionGazebo:
 
     # Does postprocess for binary images
     def post_process_image(self, image, binary=False):
-        height = 800
-        width = 848
+        height = 200
+        width = 212
         use_frame_mask = False
         cv_im = self.bridge.imgmsg_to_cv2(image, desired_encoding='passthrough')  # process image
         if binary:
@@ -215,14 +225,14 @@ class DataCollectionGazebo:
     # Samples random camera position around a given centre which is a cone.
     # The camera is rotated to have the cone in sight.
     def get_random_circle_position(self, centre=np.array([0, 0])):
-        distance = np.random.rand() * 3 + 1
+        distance = np.random.rand() * 5 + 1
         yaw = np.random.rand() * 2 * np.pi
         random_x = -np.cos(yaw) * distance + centre[0] + (np.random.rand() - 0.5) * distance / 4
         random_y = -np.sin(yaw) * distance + centre[1] + (np.random.rand() - 0.5) * distance / 4
         yaw_randomized = yaw + 1.2 * (np.random.rand() - 0.5) * np.pi / 3
-        random_z = np.random.rand() * 2.5 + 0.5
-        roll = (np.random.rand() - .5) * np.pi / 6
-        pitch = np.pi / 8 + (np.random.rand() - 0.5) * np.pi / 6
+        random_z = np.random.rand() * 3 + 0.5
+        roll = 0 #np.pi/180*45#(np.random.rand() - .5) * np.pi / 6
+        pitch =  np.pi / 180*30 #+ (np.random.rand() - 0.5) * np.pi / 6
         position = np.array([random_x, random_y, random_z, roll, pitch, yaw_randomized])
         return position
 
@@ -252,7 +262,7 @@ class DataCollectionGazebo:
         sdff = file_open.read()
         distance = np.sqrt(camera_location[0] ** 2 + camera_location[1] ** 2)
         for i in range(max_cones):
-            rand_dist = distance + np.random.rand() * 10
+            rand_dist = distance + np.random.rand() * 6
             theta = 2 * np.pi * (np.random.rand())
             x_pos = -rand_dist * np.sin(theta) - camera_location[0]
             y_pos = -rand_dist * np.cos(theta) - camera_location[1]
@@ -275,12 +285,12 @@ class DataCollectionGazebo:
         for key in self.cone_dict:
 
             if key == "cone_0":
-                rand_dist = distance + 1 + np.random.rand() * 4
+                rand_dist = distance + 1 + np.random.rand() * 6
                 theta = np.arctan(camera_position[1]/camera_position[0]) + (np.random.rand()-.5)*np.pi/6
                 if camera_position[0] > 0:
                     theta += np.pi
             else:
-                rand_dist = distance + 5 + np.random.rand() * 5
+                rand_dist = distance + 6 + np.random.rand() * 5
                 theta = 2 * np.pi * (np.random.rand())
             x_pos = rand_dist * np.cos(theta) + camera_position[0]
             y_pos = rand_dist * np.sin(theta) + camera_position[1]
@@ -329,7 +339,7 @@ if __name__ == "__main__":
         if not configuration['output_path'].startswith('/'):
             configuration['output_path'] = os.path.join(get_data_dir(os.environ['HOME']), configuration['output_path'])
         shutil.rmtree(configuration['output_path'], ignore_errors=True)
-    data_col = DataCollectionGazebo(output_path='model_evaluation_handcrafted', run_local=True)
+    data_col = DataCollectionGazebo(output_path='bebop_high_res', run_local=True)
     amount_of_images = 200
-    data_col.generate_image(amount_of_images, create_hdf5=False, augmented=False, grayscale=True, max_cones=10, output_cones=2)
+    data_col.generate_image(amount_of_images, create_hdf5=True, augmented=False, grayscale=False, max_cones=10, output_cones=2,label_empty=False)
     data_col.finish_collection()

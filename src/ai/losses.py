@@ -138,7 +138,7 @@ class AbsErrorX(Module):
         super().__init__()
 
     def forward(self, source, target):
-        abs_error_x = torch.abs(torch.sub(target[0][0], source[0][0]))
+        abs_error_x = torch.abs(torch.sub(target[0][5], source[0][5]))
         return abs_error_x
 
 class MMDLossJordan(Module):

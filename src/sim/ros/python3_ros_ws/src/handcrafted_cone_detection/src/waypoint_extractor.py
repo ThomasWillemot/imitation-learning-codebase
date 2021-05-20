@@ -189,8 +189,8 @@ class WaypointExtractor:
         '''Subscribes to topics and and runs callbacks
         '''
         # These always come with identical timestamps. Callbacks at slightly offset times.
-        rospy.Subscriber("/camera/fisheye1/image_raw", Image, self.fisheye1_callback)
-        rospy.Subscriber("/camera/fisheye2/image_raw", Image, self.fisheye2_callback)
+        rospy.Subscriber("/bebop/image_raw", Image, self.fisheye1_callback)
+        #rospy.Subscriber("/camera/fisheye2/image_raw", Image, self.fisheye2_callback)
 
     def fisheye1_callback(self, image):
         '''Buffer images coming from /camera/fisheye1/image_raw. Buffer is cleared in run().
@@ -232,13 +232,13 @@ class WaypointExtractor:
         self.rel_cor_server()
 
         while not rospy.is_shutdown():
-            if self.image1_buffer and self.image2_buffer:
+            if self.image1_buffer: # and self.image2_buffer:
                 image1 = self.image1_buffer.pop()
                 # print("pop")
                 # print(image1.header.stamp.to_sec())
 
                 self.image1_buffer.clear()
-                self.image2_buffer.clear()
+                #self.image2_buffer.clear()
 
                 relat_coor = self.extract_waypoint(image1)
                 print('Coordinates')
